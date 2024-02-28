@@ -37,18 +37,19 @@ class FigureOfEight:
             # Calculate time elapsed
             current_time = rospy.get_time()
             elapsed_time = current_time - self.start_time
-
+            is_first_loop = True
             # Move the robot
             twist_msg = Twist()
-                # First 30 seconds: Move anti-clockwise
-            if elapsed_time < 30.0:  
-                twist_msg.linear.x = 0.2
+                # First loop: Move anti-clockwise
+            if (elapsed_time < 30.0 or (self.current_x >= 0 and self.current_y >= 0)) and is_first_loop == True:  
+                twist_msg.linear.x = 0.1
                 twist_msg.angular.z = 0.2  # Adjust angular velocity as needed
                 self.cmd_vel_pub.publish(twist_msg)
                 self.rate.sleep()
-                # Next 30 seconds: Move clockwise
-            elif 30.0 < elapsed_time < 60.0 :
-                twist_msg.linear.x = 0.2
+                # Next loop: Move clockwise
+            elif elapsed_time < 60 or (self.current_x <= 0 and self.current_y >= 0):
+                is_first_loop = False
+                twist_msg.linear.x = 0.1
                 twist_msg.angular.z = -0.2  # Adjust angular velocity as needed
                 self.cmd_vel_pub.publish(twist_msg)
                 self.rate.sleep()
