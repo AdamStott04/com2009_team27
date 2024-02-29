@@ -41,13 +41,13 @@ class FigureOfEight:
             # Move the robot
             twist_msg = Twist()
                 # First loop: Move anti-clockwise
-            if (elapsed_time < 30.0 or (self.current_x >= 0 and self.current_y >= 0)) and is_first_loop == True:  
+            if (elapsed_time < 30.0 or (self.current_x >= self.initial_x and self.current_y >= self.initial_y)) and is_first_loop == True:  
                 twist_msg.linear.x = 0.1
                 twist_msg.angular.z = 0.2  # Adjust angular velocity as needed
                 self.cmd_vel_pub.publish(twist_msg)
                 self.rate.sleep()
                 # Next loop: Move clockwise
-            elif elapsed_time < 60 or (self.current_x <= 0 and self.current_y >= 0):
+            elif elapsed_time < 60 or (self.current_x <= self.initial_x and self.current_y >= self.initial_yaw):
                 is_first_loop = False
                 twist_msg.linear.x = 0.1
                 twist_msg.angular.z = -0.2  # Adjust angular velocity as needed
