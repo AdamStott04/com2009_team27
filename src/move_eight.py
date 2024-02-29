@@ -9,7 +9,7 @@ from tf.transformations import euler_from_quaternion
 class FigureOfEight:
     def __init__(self):
         rospy.init_node('move_eight', anonymous=True)
-        self.rate = rospy.Rate(10)  # 1Hz
+        self.rate = rospy.Rate(2)  # 1Hz
 
         # Publishers and Subscribers
         self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
