@@ -30,32 +30,40 @@ class ExplorerBot:
         self.scan_data = data.ranges
 
     def explore(self):
-        while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
-            # Start moving forward by default
-            self.twist.linear.x = 0.3  # Forward velocity
-            self.twist.angular.z = 0.0  # No angular velocity
+      last_direction = 0  # Initialize last chosen direction (0 for left, 1 for right)
+      while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
+        # Start moving forward by default
+        self.twist.linear.x = 0.3  # Forward velocity
+        self.twist.angular.z = 0.0  # No angular velocity
 
-            # Check if obstacle is detected
-            if self.obstacle_detected:
-                # Stop forward motion
-                self.twist.linear.x = 0.0
-                # Check if there are no obstacles in the 90-degree cone
-                non_empty_data = [x for x in self.scan_data[0:15] + self.scan_data[345:] if x]
-                if not non_empty_data or min(non_empty_data) >= self.min_distance_threshold:
-                    # No obstacles in the 90-degree cone, resume forward motion
-                    self.obstacle_detected = False
-                else:
-                    # Turn left until there are no obstacles in the 90-degree cone
-                    self.twist.angular.z = 0.5  # Turn left
+        # Check if obstacle is detected
+        if self.obstacle_detected:
+            # Stop forward motion
+            self.twist.linear.x = 0.0
+            
+            # Check if there are no obstacles in the 30-degree cone
+            non_empty_data = [x for x in self.scan_data[0:15] + self.scan_data[345:] if x]
+            if not non_empty_data or min(non_empty_data) >= self.min_distance_threshold:
+                # No obstacles in the 30-degree cone, resume forward motion
+                self.obstacle_detected = False
             else:
-                # Check if obstacle is within a certain range in the 90-degree cone
-                non_empty_data = [x for x in self.scan_data[0:15] + self.scan_data[345:] if x]
-                if non_empty_data and min(non_empty_data) < self.min_distance_threshold:
-                    self.obstacle_detected = True
+                # Turn in the same direction as the last chosen direction
+                if last_direction == 0:
+                    self.twist.angular.z = 0.5  # Turn left
+                else:
+                    self.twist.angular.z = -0.5 # Turn right
+        else:
+            # Check if obstacle is within a certain range in the 90-degree cone
+            non_empty_data = [x for x in self.scan_data[0:15] + self.scan_data[345:] if x]
+            if non_empty_data and min(non_empty_data) < self.min_distance_threshold:
+                self.obstacle_detected = True
+                # Randomly choose a direction to turn and remember it
+                last_direction = random.randint(0, 1)
 
-            # Publish the Twist message
-            self.cmd_vel_pub.publish(self.twist)
-            self.rate.sleep()
+        # Publish the Twist message
+        self.cmd_vel_pub.publish(self.twist)
+        self.rate.sleep()
+
 
     def shutdown(self):
         rospy.loginfo("Stopping Explorer Bot...")
