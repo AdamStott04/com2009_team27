@@ -17,12 +17,13 @@ class FigureOfEight:
 
         # Initialize variables
         self.start_time = rospy.get_time()
-        self.initial_x = 0.0
-        self.initial_y = 0.0
-        self.initial_yaw = 0.0
         self.current_x = 0.0
         self.current_y = 0.0
         self.current_yaw = 0.0
+        self.initial_x = self.current_x
+        self.initial_y = self.current_y
+        self.initial_yaw = 0.0
+  
 
     def odometry_callback(self, msg):
         self.current_x = msg.pose.pose.position.x
