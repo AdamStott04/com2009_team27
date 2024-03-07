@@ -27,7 +27,6 @@ class OdomSubscriber():
         robot_odom = [pos_x, pos_y, pos_z, roll, pitch, yaw]
         if self.counter > 10:
             self.counter = 0
-            print(f"x = {pos_x:.3f} (m), y = {pos_y:.3f}(m), theta_z = {yaw:.3f} (radians)")
         else:
             self.counter += 1
 
@@ -35,8 +34,6 @@ class OdomSubscriber():
         node_name = "odometry_subscriber"
         rospy.init_node(node_name, anonymous=True)
         self.sub = rospy.Subscriber("odom", Odometry, self.callback)
-        rospy.loginfo(f"The '{node_name}' node is active...")
-        
         self.counter = 0
 
     def main(self):
