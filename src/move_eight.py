@@ -34,6 +34,8 @@ class FigureOfEight:
         _, _, self.current_yaw = euler_from_quaternion([orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w])
 
     def move_robot(self):
+        log_rate = 10  # Log every 10th loop iteration
+        log_counter = 0
         while not rospy.is_shutdown():
             # Calculate time elapsed
             current_time = rospy.get_time()
@@ -63,9 +65,13 @@ class FigureOfEight:
                 rospy.loginfo("Figure-of-eight trajectory completed.")
                 break
 
-            # Print odometry data to terminal
-            rospy.loginfo("x={:.2f} [m], y={:.2f} [m], yaw={:.1f} [degrees]".format(
-                self.current_x - self.initial_x, self.current_y - self.initial_y, self.current_yaw * 180.0 / pi))
+                # Log odometry data to terminal at 1 Hz
+            if log_counter % log_rate == 0:
+                rospy.loginfo("x={:.2f} [m], y={:.2f} [m], yaw={:.1f} [degrees]".format(
+                    self.current_x - self.initial_x, self.current_y - self.initial_y, self.current_yaw * 180.0 / pi))
+
+            log_counter += 1
+
 
 if __name__ == '__main__':
     #ensures that the move_robot() method of the FigureOfEight class is called
