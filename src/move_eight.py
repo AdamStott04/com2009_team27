@@ -72,7 +72,7 @@ class FigureOfEight:
             twist_msg = Twist()
             
             # Transition to the second loop and to stop
-            if elapsed_time >= 25.0 and is_first_loop and abs(self.current_x - self.initial_x) < 0.1 and abs(self.current_y - self.initial_y) < 0.1:
+            if elapsed_time >= 25.0 and is_first_loop and abs(self.current_x - self.initial_x) < 0.01 and abs(self.current_y - self.initial_y) < 0.01 :
                 if is_first_loop == True:
                     is_first_loop = False
                 else: #second time it comes to initial position should stop
@@ -86,7 +86,7 @@ class FigureOfEight:
                 self.rate.sleep()
 
             # Next loop: Move clockwise
-            elif is_first_loop == False and elapsed_time < 65:
+            elif is_first_loop == False and elapsed_time < 64:
                 twist_msg.linear.x = 0.1
                 twist_msg.angular.z = -0.2
                 self.cmd_vel_pub.publish(twist_msg)
@@ -103,8 +103,8 @@ class FigureOfEight:
 
                 # Log odometry data to terminal at 1 Hz
             if log_counter % log_rate == 0:
-                rospy.loginfo("Time: {:.2f}s x={:.2f} [m], y={:.2f} [m], yaw={:.1f} [degrees]".format(
-                    elapsed_time, self.current_x, self.current_y, self.current_yaw * 180.0 / pi))
+                rospy.loginfo("x={:.2f} [m], y={:.2f} [m], yaw={:.1f} [degrees]".format(
+                    self.current_x, self.current_y, self.current_yaw * 180.0 / pi))
 
             log_counter += 1
 
