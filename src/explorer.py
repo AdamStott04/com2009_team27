@@ -49,9 +49,9 @@ class ExplorerBot:
             else:
                 # Turn in the same direction as the last chosen direction
                 if last_direction == 0:
-                    self.twist.angular.z = 0.5  # Turn left
+                    self.twist.angular.z = 1.4  # Turn left
                 else:
-                    self.twist.angular.z = -0.5 # Turn right
+                    self.twist.angular.z = -1.4 # Turn right
         else:
             # Check if obstacle is within a certain range in the 90-degree cone
             non_empty_data = [x for x in self.scan_data[0:15] + self.scan_data[345:] if x]
