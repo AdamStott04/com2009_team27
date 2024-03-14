@@ -33,7 +33,7 @@ class ExplorerBot:
       last_direction = 0  # Initialize last chosen direction (0 for left, 1 for right)
       while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
         # Start moving forward by default
-        self.twist.linear.x = 0.4  # Forward velocity
+        self.twist.linear.x = 1.0  # Forward velocity
         self.twist.angular.z = 0.0  # No angular velocity
 
         # Check if obstacle is detected
@@ -42,7 +42,7 @@ class ExplorerBot:
             self.twist.linear.x = 0.0
             
             # Check if there are no obstacles in the 30-degree cone
-            non_empty_data = [x for x in self.scan_data[0:15] + self.scan_data[345:] if x]
+            non_empty_data = [x for x in self.scan_data[0:17] + self.scan_data[343:] if x]
             if not non_empty_data or min(non_empty_data) >= self.min_distance_threshold:
                 # No obstacles in the 30-degree cone, resume forward motion
                 self.obstacle_detected = False
@@ -54,7 +54,7 @@ class ExplorerBot:
                     self.twist.angular.z = -1.4 # Turn right
         else:
             # Check if obstacle is within a certain range in the 90-degree cone
-            non_empty_data = [x for x in self.scan_data[0:15] + self.scan_data[345:] if x]
+            non_empty_data = [x for x in self.scan_data[0:17] + self.scan_data[343:] if x]
             if non_empty_data and min(non_empty_data) < self.min_distance_threshold:
                 self.obstacle_detected = True
                 # Randomly choose a direction to turn and remember it
