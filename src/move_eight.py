@@ -72,7 +72,7 @@ class FigureOfEight:
             twist_msg = Twist()
             
             # Transition to the second loop and to stop
-            if elapsed_time >= 25.0 and is_first_loop and abs(self.current_x - self.initial_x) < 0.2 and abs(self.current_y - self.initial_y) < 0.2 :
+            if elapsed_time >= 25.0 and is_first_loop and abs(self.current_x - self.initial_x) < 0.1 and abs(self.current_y - self.initial_y) < 0.1 :
                 if is_first_loop == True:
                     is_first_loop = False
                 else: #second time it comes to initial position should stop
@@ -80,15 +80,15 @@ class FigureOfEight:
             
             # First loop: Move anti-clockwise
             if elapsed_time < 35.0 and is_first_loop == True:  
-                twist_msg.linear.x = 0.1
-                twist_msg.angular.z = 0.2 #angular velocity has to be double linear for robot to do circle
+                twist_msg.linear.x = 0.11
+                twist_msg.angular.z = 0.22 #angular velocity has to be double linear for robot to do circle
                 self.cmd_vel_pub.publish(twist_msg)
                 self.rate.sleep()
 
             # Next loop: Move clockwise
-            elif is_first_loop == False and elapsed_time < 64:
-                twist_msg.linear.x = 0.1
-                twist_msg.angular.z = -0.2
+            elif is_first_loop == False and elapsed_time < 63:
+                twist_msg.linear.x = 0.11
+                twist_msg.angular.z = -0.22
                 self.cmd_vel_pub.publish(twist_msg)
                 self.rate.sleep()
                 
