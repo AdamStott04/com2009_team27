@@ -23,7 +23,7 @@ class ExplorerBot:
         self.obstacle_detected = False
 
         # Minimum distance threshold for obstacle detection
-        self.min_distance_threshold = 0.6  # Adjust as needed
+        self.min_distance_threshold = 0.6
 
     def scan_callback(self, data):
         # Store the scan data
@@ -41,10 +41,10 @@ class ExplorerBot:
             # Stop forward motion
             self.twist.linear.x = 0.0
             
-            # Check if there are no obstacles in the 30-degree cone
+            # Check if there are no obstacles in the 34-degree cone
             non_empty_data = [x for x in self.scan_data[0:17] + self.scan_data[343:] if x]
             if not non_empty_data or min(non_empty_data) >= self.min_distance_threshold:
-                # No obstacles in the 30-degree cone, resume forward motion
+                # No obstacles in the 34-degree cone, resume forward motion
                 self.obstacle_detected = False
             else:
                 # Turn in the same direction as the last chosen direction
@@ -53,7 +53,7 @@ class ExplorerBot:
                 else:
                     self.twist.angular.z = -1.4 # Turn right
         else:
-            # Check if obstacle is within a certain range in the 90-degree cone
+            # Check if obstacle is within a certain range in the 34-degree cone
             non_empty_data = [x for x in self.scan_data[0:17] + self.scan_data[343:] if x]
             if non_empty_data and min(non_empty_data) < self.min_distance_threshold:
                 self.obstacle_detected = True
