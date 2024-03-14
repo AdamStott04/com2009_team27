@@ -1,0 +1,3 @@
+<launch>
+    <node pkg="com2009_team27" type="explorer.py" name="explorer_bot" output="screen"/>
+</launch>

@@ -24,10 +24,8 @@ class FigureOfEight:
         self.initial_yaw = 0.0
     
     # Wait for the first odometry message to initialize start_time
-        rospy.loginfo("Waiting for the first odometry message...")
         while self.start_time is None and not rospy.is_shutdown():
             self.rate.sleep()
-        rospy.loginfo("First odometry message received. Starting movement...")
   
     #this function is called every 0.1 seconds by a node
     def odometry_callback(self, msg):
@@ -50,12 +48,11 @@ class FigureOfEight:
     
     def shutdown(self):
         # Stop the robot when the node is shutdown
-        rospy.loginfo("Shutting down...")
         twist_msg = Twist()
         twist_msg.linear.x = 0.0
         twist_msg.angular.z = 0.0
         self.cmd_vel_pub.publish(twist_msg)
-        rospy.loginfo("Robot stopped.")
+        #rospy.loginfo("Robot stopped.")
 
     def move_robot(self):
         log_rate = 10  # Log every 10th loop iteration
@@ -86,7 +83,7 @@ class FigureOfEight:
                 self.rate.sleep()
 
             # Next loop: Move clockwise
-            elif is_first_loop == False and elapsed_time < 63:
+            elif is_first_loop == False and elapsed_time < 59:
                 twist_msg.linear.x = 0.11
                 twist_msg.angular.z = -0.22
                 self.cmd_vel_pub.publish(twist_msg)
@@ -98,7 +95,7 @@ class FigureOfEight:
                 twist_msg.angular.z = 0.0
                 self.cmd_vel_pub.publish(twist_msg)
                 self.rate.sleep()
-                rospy.loginfo("Figure-of-eight trajectory completed.")
+                #rospy.loginfo("Figure-of-eight trajectory completed.")
                 break
 
                 # Log odometry data to terminal at 1 Hz
