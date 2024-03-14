@@ -72,7 +72,7 @@ class FigureOfEight:
             twist_msg = Twist()
             
             # Transition to the second loop and to stop
-            if elapsed_time >= 25.0 and is_first_loop and abs(self.current_x - self.initial_x) < 0.01 and abs(self.current_y - self.initial_y) < 0.01 :
+            if elapsed_time >= 25.0 and is_first_loop and abs(self.current_x - self.initial_x) < 0.2 and abs(self.current_y - self.initial_y) < 0.2 :
                 if is_first_loop == True:
                     is_first_loop = False
                 else: #second time it comes to initial position should stop
