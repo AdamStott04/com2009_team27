@@ -23,7 +23,7 @@ class ExplorerBot:
         self.obstacle_detected = False
 
         # Minimum distance threshold for obstacle detection
-        self.min_distance_threshold = 0.7  # Adjust as needed
+        self.min_distance_threshold = 0.6  # Adjust as needed
 
     def scan_callback(self, data):
         # Store the scan data
@@ -33,7 +33,7 @@ class ExplorerBot:
       last_direction = 0  # Initialize last chosen direction (0 for left, 1 for right)
       while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
         # Start moving forward by default
-        self.twist.linear.x = 0.3  # Forward velocity
+        self.twist.linear.x = 0.4  # Forward velocity
         self.twist.angular.z = 0.0  # No angular velocity
 
         # Check if obstacle is detected
