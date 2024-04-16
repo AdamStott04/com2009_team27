@@ -1,0 +1,3 @@
+<launch>
+    <node pkg="com2009_team27" type="maze_explorer.py" name="maze_explorer" output="screen"/>
+</launch>
