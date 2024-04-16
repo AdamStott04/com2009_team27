@@ -1,0 +1,5 @@
+<launch>
+    <arg name="target_colour" default="Black"/>
+    <node pkg="com2009_team27" type="search.py" name="search_bot" output="screen"
+    args="-colour $(arg target_colour)" />
+</launch>
