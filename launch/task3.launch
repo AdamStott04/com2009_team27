@@ -1,3 +1,43 @@
 <launch>
-    <node pkg="com2009_team27" type="maze_explorer.py" name="maze_explorer" output="screen"/>
+  <!-- Set the initial pose of your robot -->
+  <arg name="initial_pose_x" default="0.0"/>
+  <arg name="initial_pose_y" default="0.0"/>
+  <arg name="initial_pose_a" default="0.0"/>
+
+  <!-- Set the model of your robot (e.g., burger, waffle, waffle_pi) -->
+  <arg name="model" default="$(env TURTLEBOT3_MODEL)" doc="model type [burger, waffle, waffle_pi]"/>
+
+  <!-- Bringup the Turtlebot3 -->
+  <include file="$(find turtlebot3_bringup)/launch/turtlebot3_remote.launch">
+    <arg name="model" value="$(arg model)" />
+  </include>
+
+  <!-- Launch the SLAM node for mapping -->
+  <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping">
+    <param name="base_frame" value="base_link"/>
+    <param name="odom_frame" value="odom"/>
+    <param name="map_update_interval" value="5.0"/>
+    <param name="maxUrange" value="6.0"/>
+    <param name="sigma" value="0.05"/>
+    <!-- Add more parameters as needed -->
+  </node>
+
+  <!-- Launch the Adaptive Monte Carlo Localization (AMCL) node -->
+  <include file="$(find turtlebot3_navigation)/launch/amcl.launch">
+    <arg name="initial_pose_x" value="$(arg initial_pose_x)"/>
+    <arg name="initial_pose_y" value="$(arg initial_pose_y)"/>
+    <arg name="initial_pose_a" value="$(arg initial_pose_a)"/>
+  </include>
+
+  <!-- Launch the Move Base node for navigation -->
+  <include file="$(find turtlebot3_navigation)/launch/move_base.launch">
+    <arg name="model" value="$(arg model)" />
+  </include>
+
+  <!-- Launch the maze_explorer.py node -->
+  <node name="maze_explorer" pkg="com2009_team27" type="maze_explorer.py" output="screen"/>
+
+  <!-- Launch RViz for visualization -->
+  <node pkg="rviz" type="rviz" name="rviz" required="true"
+    args="-d $(find turtlebot3_navigation)/rviz/turtlebot3_navigation.rviz"/>
 </launch>
