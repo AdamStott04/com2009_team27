@@ -6,7 +6,6 @@ from nav_msgs.msg import Odometry
 from actionlib_msgs.msg import GoalStatusArray
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from tf.transformations import quaternion_from_euler
-import random
 
 class MazeExplorer:
     def __init__(self):
@@ -23,22 +22,24 @@ class MazeExplorer:
 
         # Set the publishing rate to 10Hz
         self.rate = rospy.Rate(10)
+        self.time_limit = rospy.Duration(150) 
+        self.start_time = rospy.Time.now()
 
         # Start exploring
         self.explore()
 
     def explore(self):
-        while not rospy.is_shutdown():
+        while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
             # Wait for the initial position to be received
             while self.initial_position is None:
                 rospy.logwarn("Waiting for initial position...")
                 rospy.sleep(1)
 
-            # Define exploration goal randomly
+            # Define exploration as the opposite corner
             goal = PoseStamped()
             goal.header.frame_id = "map"
-            goal.pose.position.x = random.uniform(-5, 5)  # Random x position
-            goal.pose.position.y = random.uniform(-5, 5)  # Random y position
+            goal.pose.position.x = 2
+            goal.pose.position.y = 2 
             goal.pose.position.z = 0.0
             quat = quaternion_from_euler(0, 0, 0)
             goal.pose.orientation.x = quat[0]
