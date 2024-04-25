@@ -14,7 +14,6 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid
 import cv2
 import os
-import subprocess
 import roslaunch
 
 
@@ -23,7 +22,6 @@ class SearchAndExplore:
         #initialize ros node
         rospy.init_node('search_bot')
        # Start SLAM node using subprocess
-        self.slam_process = subprocess.Popen(['roslaunch', 'turtlebot3_slam', 'turtlebot3_slam.launch'])
         
         #initialize parameters
         self.colour = rospy.get_param('~colour')
