@@ -146,8 +146,8 @@ class SearchAndExplore:
         goal = PoseStamped()
         goal.header.frame_id = "map"
         if self.goals_reached == 0:
-            goal.pose.position.x = 0.3
-            goal.pose.position.y = 0.3
+            goal.pose.position.x = 1.5
+            goal.pose.position.y = -1.5
             goal.pose.position.z = 0.0
         elif self.goals_reached == 1:
             goal.pose.position.y = 1.5
