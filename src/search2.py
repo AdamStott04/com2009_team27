@@ -10,34 +10,44 @@ from actionlib_msgs.msg import GoalStatusArray
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from tf.transformations import quaternion_from_euler
 from cv_bridge import CvBridge, CvBridgeError
+from sensor_msgs.msg import LaserScan
+from nav_msgs.msg import OccupancyGrid
 import cv2
 import os
+import subprocess
+import roslaunch
 
 
 class SearchAndExplore:
     def __init__(self):
+        #initialize ros node
         rospy.init_node('search_bot')
-        #get target colour
+       # Start SLAM node using subprocess
+        self.slam_process = subprocess.Popen(['roslaunch', 'turtlebot3_slam', 'turtlebot3_slam.launch'])
+        
+        #initialize parameters
         self.colour = rospy.get_param('~colour')
         rospy.loginfo(f"TASK 4 BEACON: The target is {self.colour}")
-
+        self.rate = rospy.Rate(10)
+        self.start_time = rospy.Time.now()
         self.goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10)
 
         #initialize goal state and start pos
         self.goal_reached = False
         self.goals_reached = 0
         self.initial_position = None
-        self.rate = rospy.Rate(10)
-        #get the time
-        self.start_time = rospy.Time.now()
-        #set up camera subscriber to get camera info
+        
+        #set up subscribers
         self.bridge = CvBridge()
+        self.scan_subscriber = rospy.Subscriber('/scan', LaserScan, self.scan_callback)
+        self.map_subscriber = rospy.Subscriber('/map', OccupancyGrid, self.map_callback)
         self.camera_subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.camera_callback)
-        #subscribe to the robots movements
         self.move_base_status_sub = rospy.Subscriber('/move_base/status', GoalStatusArray, self.move_base_status_callback)
-        #velocity publisher to move wafflebot
+       
+        #publishers
         self.twist_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-        #construct path to the snaps directory
+       
+        #variables
         self.snap_path = os.path.join(os.path.dirname(__file__), 'snaps')
         rospy.loginfo("Path to snaps directory: %s", self.snap_path)
         # Subscribe to robot's initial position
@@ -48,14 +58,30 @@ class SearchAndExplore:
 
         self.m00 = 0
         self.m00_min = 10000
-        self.move_robot()
 
-            
     def shutdown_ops(self):
         rospy.loginfo("Shutting down")
+        # Stop the robot (set velocities to zero)
+        self.twist_cmd.linear.x = 0.0
+        self.twist_cmd.angular.z = 0.0
+        self.twist_pub.publish(self.twist_cmd)
         cv2.destroyAllWindows()
         self.ctrl_c = True
+        self.save_map()
+        # Kill the SLAM process
+        self.slam_process.kill()
     
+    def save_map(self):
+        # Save the map using map_saver tool
+        map_saver_node = roslaunch.core.Node(
+            package='map_server',
+            node_type='map_saver',
+             
+            name='map_saver',
+            args=['-f', os.path.join(os.path.dirname(__file__), 'maps', 'task4_map')]
+        )
+        self.slam_launch.launch(map_saver_node)
+
     def camera_callback(self, img_data):
         #take picture
         try:
@@ -178,11 +204,12 @@ class SearchAndExplore:
         self.goals_reached += 1
 
     def main(self):
-        while not rospy.is_shutdown():
+        while not rospy.is_shutdown() and not self.ctrl_c:
             elapsed_time =  rospy.Time.now() -self.start_time 
             if elapsed_time.to_sec() > 180:
                 rospy.logwarn("More than 180 seconds have elapsed")
                 break
+            self.move_robot()
             self.rate.sleep()
 
 if __name__ == '__main__':
