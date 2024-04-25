@@ -5,39 +5,92 @@ import sensor_msgs
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 from cv_bridge import CvBridge, CvBridgeError
+from sensor_msgs.msg import LaserScan
+from nav_msgs.msg import OccupancyGrid
 import cv2
 import os
+import roslaunch
+import subprocess
 
 class SearchAndExplore:
     def __init__(self):
+        #initialize ros node
         rospy.init_node('search_bot')
-        #get target colour
+
+        # Start SLAM node using subprocess
+        self.slam_process = subprocess.Popen(['roslaunch', 'turtlebot3_slam', 'turtlebot3_slam.launch'])
+
+        #initialize parameters
         self.colour = rospy.get_param('~colour')
         rospy.loginfo(f"TASK 4 BEACON: The target is {self.colour}")
-
         self.rate = rospy.Rate(10)
-        #get the time
         self.start_time = rospy.Time.now()
 
-        #set up camera subscriber to get camera info
+        #initialize subscribers
         self.bridge = CvBridge()
         self.camera_subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.image_callback)
-        #velocity publisher to move wafflebot
+        self.scan_subscriber = rospy.Subscriber('/scan', LaserScan, self.scan_callback)
+        self.map_subscriber = rospy.Subscriber('/map', OccupancyGrid, self.map_callback)
+
+
+        #initialize publishers
         self.twist_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        
+        #initialize variables
         #construct path to the snaps directory
         self.snap_path = os.path.join(os.path.dirname(__file__), 'snaps')
         rospy.loginfo("Path to snaps directory: %s", self.snap_path)
-        
         self.detected_beacon = False
         self.twist_cmd = Twist()
-
         self.m00 = 0
         self.m00_min = 10000
+        self.ctrl_c = False
+
+        #SLAM variables
+        self.map_data = None
+
+        # Obstacle avoidance variables
+        self.obstacle_detected = False
+        self.min_distance_threshold = 0.6
+        self.twist_cmd = Twist()
+
+        # Register the shutdown callback
+        rospy.on_shutdown(self.shutdown_ops)
+
+    
+    def scan_callback(self, data):
+        #Check if obstacle is detected
+        non_empty_data = [x for x in data.ranges[0:17] + data.ranges[343:] if x]
+        if non_empty_data and min(non_empty_data) < self.min_distance_threshold:
+            self.obstacle_detected = True
+        else:
+            self.obstacle_detected = False
+    
+    def map_callback(self, data):
+        #Store map data
+        self.map_data = data.data
     
     def shutdown_ops(self):
         rospy.loginfo("Shutting down")
+        # Stop the robot (set velocities to zero)
+        self.twist_cmd.linear.x = 0.0
+        self.twist_cmd.angular.z = 0.0
+        self.twist_pub.publish(self.twist_cmd)
         cv2.destroyAllWindows()
         self.ctrl_c = True
+        self.save_map()
+        # Kill the SLAM process
+        self.slam_process.kill()
+    
+    def save_map(self):
+        # Save the map using map_saver tool
+        map_saver_node = roslaunch.core.Node(
+            package='map_server',
+            node_type='map_saver',
+            name='map_saver',
+            args=['-f', os.path.join(os.path.dirname(__file__), 'maps', 'task4_map')]
+        )
+        self.slam_launch.launch(map_saver_node)
     
     def camera_callback(self, img_data):
         try:
@@ -102,15 +155,27 @@ class SearchAndExplore:
         rospy.loginfo(f"Photo of {self.colour} beacon captured.")
     
     def move_robot(self):
-        #todo
+        if self.obstacle_detected:
+            # Stop forward motion
+            self.twist_cmd.linear.x = 0.0
+            # Perform obstacle avoidance (turning)
+            self.twist_cmd.angular.z = 1.4  # Turn left
+        else:
+            self.twist_cmd.linear.x = 0.1
+            self.twist_cmd.angular.z = 0.0
+
+        # Publish the Twist message
+        self.twist_pub.publish(self.twist_cmd)
         pass
     
     def run(self):
-        while not rospy.is_shutdown():
+        while not rospy.is_shutdown() and not self.ctrl_c:
             elapsed_time = rospy.Time.now() - self.start_time
             if elapsed_time.to_sec() > 180:
                 rospy.logwarn("More than 180 seconds have elapsed")
                 break
+            # Move the robot
+            self.move_robot()
             self.rate.sleep()
 
 if __name__ == '__main__':
