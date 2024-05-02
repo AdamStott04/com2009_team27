@@ -29,6 +29,8 @@ class SearchAndExplore:
         self.colour = rospy.get_param('~colour')
         rospy.loginfo(f"TASK 4 BEACON: The target is {self.colour}")
 
+        self.active_goals = 1
+        self.goals_reached = 0
         self.move_base_client = actionlib.SimpleActionClient('/move_base',MoveBaseAction)
         self.move_base_client.wait_for_server()
 
@@ -51,6 +53,7 @@ class SearchAndExplore:
         self.m00 = 0
         self.pillar_locations = []
         self.m00_min = 10000
+        
 
         # Set the publishing rate to 10Hz
         self.rate = rospy.Rate(10)
@@ -114,45 +117,9 @@ class SearchAndExplore:
         
         if self.m00 > self.m00_min:
             cv2.circle(crop_img, (int(self.cy), 200), 10, (0, 0, 255), 2)
-        
+
         cv2.imshow('cropped image', crop_img)
         cv2.waitKey(1)
-        #assign colour detection values
-        #if colour == "blue":
-        #    lower = (115, 224, 100)
-        #    upper = (130, 255, 255)
-        #elif colour == "red":
-        #    lower = (0, 224, 100)
-        #   upper = (20, 255, 255)
-        #elif colour == "green":
-        #    lower = (45, 224, 100)
-        #    upper = (75, 255, 255)
-        #elif colour == "yellow":
-        #    lower = (25, 224, 100)
-        #    upper = (35, 255, 255)
-        #else:
-        #   rospy.loginfo("Enter a valid colour")
-        #    return
-        #make mask
-        #mask = cv2.inRange(hsv_img, lower, upper)
-        #res = cv2.bitwise_and(crop_img, crop_img, mask=mask)
-        #m = cv2.moments(mask)
-
-        #self.m00 = m['m00']
-        #self.cy = m['m10'] / (m['m00'] + 1e-5)
-        
-        #if self.m00 > self.m00_min:
-        #    cv2.circle(crop_img, (int(self.cy), 200), 10, (0, 0, 255), 2)
-
-        #cv2.imshow('cropped image', res)
-        #cv2.waitKey(1)
-
-        
-        #if self.detected_beacon:
-        #    file_name = os.path.join(self.snap_path, 'task4_beacon.jpg')
-        #    cv2.imwrite(file_name, crop_img)
-        #    rospy.loginfo(f"Photo of {self.colour} beacon captured.")
-    
     
     def odom_callback(self, msg):
         # Store robot's initial position
@@ -167,10 +134,12 @@ class SearchAndExplore:
     def move_base_status_callback(self, status):
         # Check if move_base reached the goal
         for goal_status in status.status_list:
-            if goal_status.status == 3:  # SUCCEEDED
-                print("GOAL REACHED!")
-                self.goal_reached = True
-
+            if goal_status.status == 3:  # SUCCEEDED 
+                self.goals_reached += 1
+        if self.active_goals == self.goals_reached: #Checking how many goals have succeeded
+            self.goal_reached = True
+            self.active_goals += 1
+        self.goals_reached = 0
 
     def search_for_pillars(self):
         self.pillar_locations = [None] * 4
@@ -230,6 +199,7 @@ class SearchAndExplore:
                 rospy.loginfo("Exploring to goal: ({}, {})".format(goal.pose.position.x, goal.pose.position.y))
                 self.goal_pub.publish(goal)
 
+
             # Publish exploration goal
             
 
@@ -249,10 +219,13 @@ class SearchAndExplore:
 
             #Iterate through the goals
             for i in range(0,4):
+                print(self.pillar_locations[i][0])
+                print(self.pillar_locations[i][1])
                 goal.pose.position.x = self.pillar_locations[i][0]
                 goal.pose.position.y = self.pillar_locations[i][1]
                 self.goal_pub.publish(goal)
                 rospy.loginfo("Exploring to goal: ({}, {})".format(goal.pose.position.x, goal.pose.position.y))
+                print(self.goal_reached)
                 while not self.goal_reached:
                     if rospy.is_shutdown():
                         return
