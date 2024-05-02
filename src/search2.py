@@ -11,7 +11,7 @@ from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
-from actionlib_msgs.msg import GoalStatusArray
+from actionlib_msgs.msg import GoalStatusArray, GoalStatus
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from tf.transformations import quaternion_from_euler,euler_from_quaternion
 from cv_bridge import CvBridge, CvBridgeError
@@ -37,6 +37,7 @@ class SearchAndExplore:
         self.goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10)
         self.camera_subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.camera_callback)
         self.move_base_status_sub = rospy.Subscriber('/move_base/status', GoalStatusArray, self.move_base_status_callback)
+        self.vel_sub = rospy.Subscriber('/cmd_vel', Twist, self.velocity_callback)
         self.goal_reached = False
         self.initial_position = None
         self.current_scan = None
@@ -53,7 +54,8 @@ class SearchAndExplore:
         self.m00 = 0
         self.pillar_locations = []
         self.m00_min = 10000
-        
+        self.is_moving = False
+
 
         # Set the publishing rate to 10Hz
         self.rate = rospy.Rate(10)
@@ -81,7 +83,12 @@ class SearchAndExplore:
     def scan_callback(self, scan_msg):
         # Store the latest laser scan data
         self.current_scan = scan_msg
-
+    def velocity_callback(self,velocity_msg):
+        if abs(velocity_msg.linear.x) > 0 or abs(velocity_msg.angular.z) > 0:
+        # Robot is moving
+            self.is_moving = True
+        else: 
+            self.is_moving = False
     def camera_callback(self, img_data):
         #take picture
         try:
@@ -219,20 +226,34 @@ class SearchAndExplore:
 
             #Iterate through the goals
             for i in range(0,4):
-                print(self.pillar_locations[i][0])
-                print(self.pillar_locations[i][1])
                 goal.pose.position.x = self.pillar_locations[i][0]
                 goal.pose.position.y = self.pillar_locations[i][1]
                 self.goal_pub.publish(goal)
                 rospy.loginfo("Exploring to goal: ({}, {})".format(goal.pose.position.x, goal.pose.position.y))
-                print(self.goal_reached)
                 while not self.goal_reached:
+                    #Checks if goal is on free space
+                    if self.is_moving == False:
+                        goal.pose.position.y = (self.pillar_locations[i][1] + 0.25)# Changes goal coords based until it works
+                        self.goal_pub.publish(goal)
+                        print("changing south")
+                        rospy.sleep(2)
+                        goal.pose.position.x = (self.pillar_locations[i][0] - 0.25)# Changes goal coords based until it works
+                        self.goal_pub.publish(goal)
+                        print("changing west")
+                        rospy.sleep(2)
+                        goal.pose.position.x = (self.pillar_locations[i][0] + 0.25)# Changes goal coords based until it works
+                        self.goal_pub.publish(goal)
+                        print("changing east")
+                        rospy.sleep(2)
+                        goal.pose.position.y = (self.pillar_locations[i][1] - 0.25)# Changes goal coords based until it works
+                        self.goal_pub.publish(goal)
+                        print("changing north")
+                        rospy.sleep(2)
                     if rospy.is_shutdown():
                         return
                     self.rate.sleep()
-                self.goal_reached = False
+                self.goal_reached = False        
 
-                            
     def main(self):
         while not rospy.is_shutdown():
             # Continue running until 180 seconds have passed
