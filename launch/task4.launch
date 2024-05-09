@@ -61,7 +61,7 @@
     <arg name="model" value="$(arg model)" />
   </include>
 
-  <!-- Launch the search2.py node -->
+  <!-- Launch the search3.py node -->
     <arg name="target_colour" default="Black"/>
     <node pkg="com2009_team27" type="searchy3.py" name="search_bot" output="screen">
         <param name="colour" value="$(arg target_colour)"/>
@@ -69,8 +69,4 @@
   <!-- Launch RViz for visualization -->
   <node pkg="rviz" type="rviz" name="rviz" required="true"
     args="-d $(find turtlebot3_navigation)/rviz/turtlebot3_navigation.rviz"/>
-
-  <!-- Launch map saver -->
-  <node pkg="com2009_team27" type="map_saver_node.py" name="map_saver" output="screen">
-</node>
 </launch>

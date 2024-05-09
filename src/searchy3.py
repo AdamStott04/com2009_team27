@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 #all the imports
 import rospy
+import roslaunch
+import threading
 import sensor_msgs 
 import cv2
 import actionlib
@@ -286,12 +288,31 @@ class SearchAndExplore:
 
 
         # Publish the Twist message to control the robot's movement
+    def save_map(self):
+        package = "map_server"
+        executable = "map_saver"
+        maps_folder = "/home/student/catkin_ws/src/com2009_team27/src/maps"
+        rate = rospy.Rate(0.5)
+        args = f"-f {maps_folder}/task4_map.pgm"
+        node = roslaunch.core.Node(package, executable, args=args, output="screen")
 
+        launch = roslaunch.scriptapi.ROSLaunch()
+        launch.start()
+
+        process = launch.launch(node)
+        rate.sleep()
+
+        rospy.loginfo("Map saved succesfully.")
 
     def main(self):
         while not rospy.is_shutdown():
+            
+        
             # Continue running until 180 seconds have passed
             while (rospy.Time.now() - self.start_time).to_sec() < 180:
+                # Start the map saver timer
+                self.save_map()
+                print("HEEEEEEEEEERE")
                 rospy.sleep(1)  # Add a small delay to reduce CPU usage
                 #Start the movement function
                 self.move_robot()
@@ -306,6 +327,6 @@ if __name__ == '__main__':
     try:
         explorer = SearchAndExplore()
         explorer.main()
-        rospy.spin
+        rospy.spin()
     except rospy.ROSInterruptException:
         pass
