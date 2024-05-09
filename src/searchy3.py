@@ -264,7 +264,7 @@ class SearchAndExplore:
         min_range_index = self.ranges.index(min(self.ranges))
         while self.knocking_on_heavens_door == True:
             if rospy.is_shutdown():
-                        return
+                return
             if min_range_index <= len(self.ranges) / 2 - self.wall_angle_threshold:
                 # Wall detected on the left-hand side
                 angular_velocity = 0 
@@ -282,9 +282,10 @@ class SearchAndExplore:
             else:
                 # Set the robot's movement command for spinning
                 self.robot_controller.set_move_cmd(0.0, 0.5)
+            self.robot_controller.publish()
+
 
         # Publish the Twist message to control the robot's movement
-        self.robot_controller.publish()
 
 
     def main(self):
