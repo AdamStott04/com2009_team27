@@ -69,4 +69,8 @@
   <!-- Launch RViz for visualization -->
   <node pkg="rviz" type="rviz" name="rviz" required="true"
     args="-d $(find turtlebot3_navigation)/rviz/turtlebot3_navigation.rviz"/>
+
+  <!-- Launch map saver -->
+  <node pkg="com2009_team27" type="map_saver_node.py" name="map_saver" output="screen">
+</node>
 </launch>
