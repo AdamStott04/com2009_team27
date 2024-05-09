@@ -1,0 +1,4 @@
+<launch>
+    <!-- Start the robot node -->
+    <node pkg="com2009_team27" type="leftwallhugger.py" name="leftWallHugger" output="screen"/>
+</launch>
