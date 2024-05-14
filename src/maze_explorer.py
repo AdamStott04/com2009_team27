@@ -91,7 +91,7 @@ class MazeExplorer:
             return False
         current_position = self.initial_position
         distance = ((current_position.x - self.previous_position.x) ** 2 + (current_position.y - self.previous_position.y) ** 2) ** 0.5
-        return distance > 0.2  # Consider a change significant if the robot has moved more than 0.1 meters
+        return distance > 0.1  # Consider a change significant if the robot has moved more than 0.1 meters
 
     def create_goal(self, x, y):
         goal = PoseStamped()
