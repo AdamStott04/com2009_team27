@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 #all the imports
 import rospy
-import roslaunch
-import threading
-import sensor_msgs 
 import cv2
-import actionlib
 import os
+import roslaunch
 import numpy as np
 from sensor_msgs.msg import Image
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
-from actionlib_msgs.msg import GoalStatusArray, GoalStatus
-from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from tf.transformations import quaternion_from_euler,euler_from_quaternion
 from cv_bridge import CvBridge, CvBridgeError
 from tb3 import Tb3Move
@@ -31,40 +26,23 @@ class SearchAndExplore:
         self.colour = rospy.get_param('~colour')
         rospy.loginfo(f"TASK 4 BEACON: The target is {self.colour}")
 
-        self.goals_reached = 0
-        self.move_base_client = actionlib.SimpleActionClient('/move_base',MoveBaseAction)
-        self.move_base_client.wait_for_server()
-
-        self.goal_pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10)
         self.camera_subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.camera_callback)
-        self.move_base_status_sub = rospy.Subscriber('/move_base/status', GoalStatusArray, self.move_base_status_callback)
-        self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-        self.vel_sub = rospy.Subscriber('/cmd_vel', Twist, self.velocity_callback)
-        self.goal_reached = False
         self.initial_position = None
         self.current_scan = None
-        self.previous_scan = None
         self.colour_detected = False
-        self.cvbridge_interface = CvBridge()
         self.robot_controller = Tb3Move()
-        self.turn_vel_fast = -0.5
-        self.turn_vel_slow = -0.2
-        self.robot_controller.set_move_cmd(0.0, self.turn_vel_fast)
+        self.robot_controller.set_move_cmd(0.0, 0.0)
         self.move_rate = "" # fast, slow or stop
         self.stop_counter = 0
         self.centered = False
         self.m00 = 0
         self.pillar_locations = []
         self.m00_min = 10000
-        self.is_moving = False
         self.current_colour = ""
-        self.angular_speed = 0.5  # Angular speed for turning
-        self.linear_speed = 0.2   # Linear speed for moving forward
-        self.desired_distance = 0.5  # Desired distance from the wall
-        self.distance_threshold = 0.05  # Distance threshold for wall following
-        self.wall_angle_threshold = 10  # Angle threshold to detect a wall
-        self.knocking_on_heavens_door = False #checks if robot is outside 
-        self.last_goals_reached = 0
+        self.pillar_seen = False
+        self.moving_to_edge = False
+        self.pillars_found = 0
+
 
         # Set the publishing rate to 10Hz
         self.rate = rospy.Rate(10)
@@ -78,7 +56,7 @@ class SearchAndExplore:
         #construct path to the snaps directory
         self.snap_path = os.path.join(os.path.dirname(__file__), 'snaps')
         rospy.loginfo("Path to snaps directory: %s", self.snap_path)
-
+        
         # Subscribe to robot's initial position
         rospy.Subscriber('/odom', Odometry, self.odom_callback)
         rospy.Subscriber('/scan', LaserScan, self.scan_callback)
@@ -94,12 +72,6 @@ class SearchAndExplore:
         self.current_scan = scan_msg
         self.ranges = scan_msg.ranges
        
-    def velocity_callback(self,velocity_msg):
-        if abs(velocity_msg.linear.x) > 0 or abs(velocity_msg.angular.z) > 0:
-        # Robot is moving
-            self.is_moving = True            
-        else: 
-            self.is_moving = False
     def camera_callback(self, img_data):
         #take picture
         try:
@@ -136,7 +108,9 @@ class SearchAndExplore:
         
         if self.m00 > self.m00_min:
             cv2.circle(crop_img, (int(self.cy), 200), 10, (0, 0, 255), 2)
-
+        print(self.m00)
+        if self.m00 > 20000000:
+            self.pillar_seen = True
         cv2.imshow('cropped image', crop_img)
         cv2.waitKey(1)
     
@@ -145,30 +119,14 @@ class SearchAndExplore:
         if self.initial_position is None:
             self.initial_position = msg.pose.pose.position
         #store angle
+        self.current_pos = msg.pose.pose.position
         orientation_q = msg.pose.pose.orientation
         _, _, self.current_yaw = euler_from_quaternion([orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w])
-
-
-
-    def move_base_status_callback(self, status):
-        # Check if move_base reached the goal
-        for goal_status in status.status_list:
-            print(len(status.status_list))
-            if goal_status.status == 3:  # SUCCEEDED 
-                self.goals_reached += 1
-                if self.goals_reached == self.last_goals_reached + 1:
-                    print("KACHING")
-                    self.goal_reached = True
-        self.last_goals_reached = self.goals_reached
-        self.goals_reached = 0
-
+    
     def search_for_pillars(self):
-        self.pillar_locations = [None] * 4
-        self.pillar_angles = [None] * 4
         last_detection_time = rospy.Time.now()
-        pillars_found = 0
         #check if pillar visible
-        while  pillars_found < 4:
+        while self.pillars_found != 1:
             if self.m00 > self.m00_min:
                     # blob detected
                     if self.cy >= 560-100 and self.cy <= 560+100:
@@ -176,10 +134,10 @@ class SearchAndExplore:
                             if (rospy.Time.now() - last_detection_time).to_sec() >= 1.0:  # 1 second grace period
                                 print("pillar stored")
                                 distance = self.current_scan.ranges[0]
-                                self.pillar_angles[pillars_found] = self.current_yaw
-                                print(self.pillar_angles[pillars_found])
-                                self.pillar_locations[pillars_found] = ((distance-0.4) * np.cos(self.current_yaw), (distance-0.4)* np.sin(self.current_yaw))
-                                pillars_found += 1  # Increment pillars found
+                                self.pillar_angles[self.pillars_found] = self.current_yaw
+                                print(self.pillar_angles[self.pillars_found])
+                                self.pillar_locations[self.pillars_found] = ((distance-0.4) * np.cos(self.current_yaw), (distance-0.4)* np.sin(self.current_yaw))
+                                self.pillars_found += 1  # Increment pillars found
                                 last_detection_time = rospy.Time.now()  # Update last detection time
                     else:
                         self.move_rate = 'slow'
@@ -192,102 +150,60 @@ class SearchAndExplore:
             elif self.move_rate == 'slow':
                 print(f"MOVING SLOW: A blob of colour {self.colour} of size {self.m00:.0f} pixels is in view at y-position: {self.cy:.0f} pixels.")
                 self.robot_controller.set_move_cmd(0.0, self.turn_vel_slow)
-           #is the pillar behind a wall
-
             #work out distance and set coordinates
             self.robot_controller.publish()
             self.rate.sleep()
 
-        print("LOOP LEFT")
-    
     def move_robot(self):
         while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
-
+            # wait for initial position
             while self.initial_position is None:
                 rospy.logwarn("Waiting for initial position...")
                 rospy.sleep(1)
-
-            # Move to the center for improved vision
-            if self.centered == False:
-                goal = PoseStamped()
-                goal.header.frame_id = "map"
-                goal.pose.position.x = 0.0
-                goal.pose.position.y = 0.0
-                goal.pose.position.z = 0.0
-                quat = quaternion_from_euler(0, 0, 3.2)
-                goal.pose.orientation.x = quat[0]
-                goal.pose.orientation.y = quat[1]
-                goal.pose.orientation.z = quat[2]
-                goal.pose.orientation.w = quat[3]
-                rospy.loginfo("Exploring to goal: ({}, {})".format(goal.pose.position.x, goal.pose.position.y))
-
-
-                # Publish exploration goal
-                self.goal_pub.publish(goal)
-
-
-            # Wait for the goal to be reached or for a new goal to be published
-            while not self.goal_reached:
+            # find farest point
+            max_range_index = self.ranges.index(max(self.ranges))
+            # Return the lowest distance found
+            rospy.loginfo(f"angle of approach is {max_range_index}")
+            #move to this point
+            destination_reached = False
+            while destination_reached != True:
+                if rospy.is_shutdown():
+                        return
+                if self.current_yaw * (180/np.pi) < 0:
+                    self.current_angle = int(360-(np.round(-1*(self.current_yaw * (180/np.pi)))))
+                else:
+                    self.current_angle = int(np.round(self.current_yaw * (180/np.pi)))
+                if self.current_angle != float(max_range_index) and self.moving_to_edge == False:
+                    self.robot_controller.set_move_cmd(0, 0.5)
+                elif self.ranges[0] > 0.4:
+                    self.robot_controller.set_move_cmd(0.2,0)
+                    rospy.loginfo(self.ranges[0])
+                    self.moving_to_edge = True
+                else:
+                    destination_reached = True
+                    self.robot_controller.set_move_cmd(0,0)
+                self.robot_controller.publish()
+            #initial turn
+            while any(self.ranges[i] > 0.5 for i in range(65,90)):
+                self.robot_controller.set_move_cmd(0,-0.5)
+                self.robot_controller.publish()
+            #log point
+            self.start_point = self.current_pos
+            #loop keeping the wall on the left breaking if it sees a pillar or retutns to the original point
+            while self.pillar_seen == False:
                 if rospy.is_shutdown():
                     return
-                self.rate.sleep()
-
-            # Reset goal_reached flag for next exploration
-            self.goal_reached = False
-            self.centered = True
-
-            if len(self.pillar_locations) < 4:
-                # Identify the four pillars by looking over the walls
-                self.search_for_pillars()
-
-            #Iterate through the goals
-            for i in range(0,4):
-                goal.pose.position.x = self.pillar_locations[i][0]
-                goal.pose.position.y = self.pillar_locations[i][1]
-                quat = quaternion_from_euler(0, 0, self.pillar_angles[i])
-                goal.pose.orientation.x = quat[0]
-                goal.pose.orientation.y = quat[1]
-                goal.pose.orientation.z = quat[2]
-                goal.pose.orientation.w = quat[3]
-                self.goal_pub.publish(goal)    
-                while not self.goal_reached:
-                    if rospy.is_shutdown():
-                        return
-                    self.rate.sleep()
-                self.goal_reached = False
-                #when reached near goal explore around until the object is in full view
-                print("knock knock knock")
-                self.knocking_on_heavens_door = True
-                self.move_base_client.cancel_goal()
-                self.search_for_entrance()
-        
-    def search_for_entrance(self):
-         # Find the index of the closest object in front of the robot
-        min_range_index = self.ranges.index(min(self.ranges))
-        while self.knocking_on_heavens_door == True:
-            if rospy.is_shutdown():
-                return
-            if min_range_index <= len(self.ranges) / 2 - self.wall_angle_threshold:
-                # Wall detected on the left-hand side
-                angular_velocity = 0 
-                # Calculate the difference between desired distance and actual distance from the wall
-                distance_error = self.desired_distance - self.ranges[min_range_index]
-
-                # Apply proportional control to adjust the robot's angular velocity
-                angular_velocity = self.angular_speed * distance_error
-
-                # Limit the angular velocity within a certain range
-                angular_velocity = max(-1.0, min(1.0, angular_velocity))
-
-                # Set the robot's movement command
-                self.robot_controller.set_move_cmd(self.linear_speed, angular_velocity)
-            else:
-                # Set the robot's movement command for spinning
-                self.robot_controller.set_move_cmd(0.0, 0.5)
-            self.robot_controller.publish()
-
-
-        # Publish the Twist message to control the robot's movement
+                if any(self.ranges[j] < 0.4 for j in range(1, 15)) or any(self.ranges[j] < 0.4 for j in range(345, 360)) or all(self.ranges[i] > 0.4 for i in range(70, 90)) or all(self.ranges[i] < 0.3 for i in range(70, 90)):  
+                    self.robot_controller.set_move_cmd(0,0.3)
+                    if any(self.ranges[i] < 0.4 for i in range(1, 16)):
+                        self.robot_controller.set_move_cmd(0.05,-0.5)
+                    elif all(self.ranges[i] < 0.3 for i in range(70, 90)):
+                        self.robot_controller.set_move_cmd(0.1,-0.1)
+                else:
+                    rospy.sleep(1) 
+                    self.robot_controller.set_move_cmd(0.15,0)
+                
+                self.robot_controller.publish()
     def save_map(self):
         package = "map_server"
         executable = "map_saver"
@@ -303,18 +219,15 @@ class SearchAndExplore:
         rate.sleep()
 
         rospy.loginfo("Map saved succesfully.")
+                    
 
     def main(self):
         while not rospy.is_shutdown():
-            
-        
             # Continue running until 180 seconds have passed
             while (rospy.Time.now() - self.start_time).to_sec() < 180:
-                # Start the map saver timer
-                self.save_map()
-                print("HEEEEEEEEEERE")
                 rospy.sleep(1)  # Add a small delay to reduce CPU usage
                 #Start the movement function
+                self.save_map()
                 self.move_robot()
             
             rospy.loginfo("180 seconds have elapsed, exiting.")
@@ -327,6 +240,6 @@ if __name__ == '__main__':
     try:
         explorer = SearchAndExplore()
         explorer.main()
-        rospy.spin()
+        rospy.spin
     except rospy.ROSInterruptException:
         pass
