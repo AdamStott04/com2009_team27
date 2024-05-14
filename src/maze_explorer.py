@@ -40,7 +40,7 @@ class MazeExplorer:
 
             # Define exploration goals
             goals = [
-                (2, 2),
+                (-self.initial_position.x, -self.initial_position.y),
                 # Add more exploration goals here as needed
             ]
 
@@ -81,7 +81,7 @@ class MazeExplorer:
         self.previous_scan = scan_msg
 
     def detect_significant_change(self, current_scan):
-        THRESHOLD = 0.1
+        THRESHOLD = 1.0
         scan_diff = [abs(curr_range - prev_range) for curr_range, prev_range in zip(current_scan.ranges, self.previous_scan.ranges)]
         position_change = self.calculate_position_change()
         return any(diff > THRESHOLD for diff in scan_diff) and position_change
@@ -91,7 +91,7 @@ class MazeExplorer:
             return False
         current_position = self.initial_position
         distance = ((current_position.x - self.previous_position.x) ** 2 + (current_position.y - self.previous_position.y) ** 2) ** 0.5
-        return distance > 0.1  # Consider a change significant if the robot has moved more than 0.1 meters
+        return distance > 1.0  # Consider a change significant if the robot has moved more than 0.1 meters
 
     def create_goal(self, x, y):
         goal = PoseStamped()

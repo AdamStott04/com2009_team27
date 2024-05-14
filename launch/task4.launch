@@ -17,4 +17,29 @@
   <node pkg="com2009_team27" type="search4.py" name="search_bot" output="screen">
     <param name="colour" value="$(arg target_colour)"/>
   </node>
+<<<<<<< HEAD
 </launch>
+=======
+
+  <!-- Launch the Adaptive Monte Carlo Localization (AMCL) node -->
+  <include file="$(find turtlebot3_navigation)/launch/amcl.launch">
+    <arg name="initial_pose_x" value="$(arg initial_pose_x)"/>
+    <arg name="initial_pose_y" value="$(arg initial_pose_y)"/>
+    <arg name="initial_pose_a" value="$(arg initial_pose_a)"/>
+  </include>
+
+  <!-- Launch the Move Base node for navigation -->
+  <include file="$(find turtlebot3_navigation)/launch/move_base.launch">
+    <arg name="model" value="$(arg model)" />
+  </include>
+
+  <!-- Launch the search3.py node -->
+    <arg name="target_colour" default="Black"/>
+    <node pkg="com2009_team27" type="searchy3.py" name="search_bot" output="screen">
+        <param name="colour" value="$(arg target_colour)"/>
+    </node>
+  <!-- Launch RViz for visualization -->
+  <node pkg="rviz" type="rviz" name="rviz" required="true"
+    args="-d $(find turtlebot3_navigation)/rviz/turtlebot3_navigation.rviz"/>
+</launch>
+>>>>>>> eb75a784554c009ff6baada60efde18284f7bb07
