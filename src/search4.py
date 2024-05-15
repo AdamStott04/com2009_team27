@@ -25,6 +25,8 @@ class SearchAndExplore:
         #get target colour
         self.colour = rospy.get_param('~colour')
         rospy.loginfo(f"TASK 4 BEACON: The target is {self.colour}")
+        # Register the shutdown callback
+        rospy.on_shutdown(self.shutdown_ops)
 
         self.camera_subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.camera_callback)
         self.initial_position = None
@@ -64,10 +66,10 @@ class SearchAndExplore:
             
     
     def shutdown_ops(self):
-        rospy.loginfo("Shutting down")
         self.robot_controller.stop()
         cv2.destroyAllWindows()
         self.ctrl_c = True
+    
     def scan_callback(self, scan_msg):
         # Store the latest laser scan data
         self.current_scan = scan_msg
@@ -165,6 +167,7 @@ class SearchAndExplore:
             self.rate.sleep()
         
     def move_robot(self):
+        self.save_map()
         while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
             # wait for initial position
             while self.initial_position is None:
@@ -214,12 +217,14 @@ class SearchAndExplore:
                     self.robot_controller.set_move_cmd(0.15,0)
                 
                 self.robot_controller.publish()
+    
     def save_map(self):
+        rospy.logdebug("saving map")
         package = "map_server"
         executable = "map_saver"
-        maps_folder = "/home/student/catkin_ws/src/com2009_team27/src/maps"
+        maps_folder = "/home/student/catkin_ws/src/com2009_team27/maps"
         rate = rospy.Rate(0.5)
-        args = f"-f {maps_folder}/task4_map.pgm"
+        args = f"-f {maps_folder}/task4_map"
         node = roslaunch.core.Node(package, executable, args=args, output="screen")
 
         launch = roslaunch.scriptapi.ROSLaunch()
@@ -228,8 +233,8 @@ class SearchAndExplore:
         process = launch.launch(node)
         rate.sleep()
 
-        rospy.loginfo("Map saved succesfully.")
-                    
+        rospy.logdebug("Map saved succesfully.")
+            
 
     def main(self):
         while not rospy.is_shutdown():
@@ -237,13 +242,12 @@ class SearchAndExplore:
             while (rospy.Time.now() - self.start_time).to_sec() < 180:
                 rospy.sleep(1)  # Add a small delay to reduce CPU usage
                 #Start the movement function
-                self.save_map()
                 self.move_robot()
             
             rospy.loginfo("180 seconds have elapsed, exiting.")
             break  # Exit the loop after 180 seconds
-
         rospy.loginfo("Shutting down.")
+        
     
 
 if __name__ == '__main__':
