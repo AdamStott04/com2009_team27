@@ -41,6 +41,7 @@ class SearchAndExplore:
         self.current_colour = ""
         self.pillar_seen = False
         self.moving_to_edge = False
+        self.take_picture = False
         self.pillars_found = 0
 
 
@@ -73,25 +74,28 @@ class SearchAndExplore:
         self.ranges = scan_msg.ranges
        
     def camera_callback(self, img_data):
-        #take picture
+        # Take picture
         try:
             cv_img = self.bridge.imgmsg_to_cv2(img_data, desired_encoding="bgr8")   
         except CvBridgeError as e:
             rospy.logerr(e)
-        #assign values
+            
+        # Assign values
         colour = self.colour
         height, width, _ = cv_img.shape
         crop_width = width - 800
         crop_height = 400
         crop_x = int((width/2) - (crop_width/2))
         crop_y = int((height/2) - (crop_height/2))
-        #crop picture
+        
+        # Crop picture
         crop_img = cv_img[crop_y:crop_y+crop_height, crop_x:crop_x+crop_width]
         hsv_img = cv2.cvtColor(crop_img, cv2.COLOR_BGR2HSV)
-        colours = ["blue","red","green","yellow"]
-        lowers = [(115,225,100),(25,224,100),(56,211,100),(-2,209,100)]
-        uppers = [(130,255,255),(35,255,255),(61,258,255),(5,258,255)]
         
+        colours = ["blue","red","green","yellow"]
+        lowers = [(115,225,100),(-2,209,100),(56,211,100),(25,224,100)]
+        uppers = [(130,255,255),(5,258,255),(61,258,255),(35,255,255)]
+        self.masks = {colour: (lower, upper) for colour, lower, upper in zip(colours, lowers, uppers)}
 
         for i in range(4):
             if i == 0:
@@ -99,18 +103,27 @@ class SearchAndExplore:
             else:
                 mask += cv2.inRange(hsv_img, lowers[i], uppers[i])
             self.current_colour = colours[i]
-
-        res = cv2.bitwise_and(crop_img, crop_img, mask = mask)
-
+        
         m = cv2.moments(mask)
         self.m00 = m['m00']
         self.cy = m['m10'] / (m['m00'] + 1e-5)
-        
+        max_area = 0
         if self.m00 > self.m00_min:
+            for colour, (lower, upper) in self.masks.items():
+                    mask = cv2.inRange(hsv_img, lower, upper)
+                    m = cv2.moments(mask)
+                    area = m['m00']
+                    if area > max_area:
+                        max_area = area
+                        max_area_colour = colour
             cv2.circle(crop_img, (int(self.cy), 200), 10, (0, 0, 255), 2)
-        print(self.m00)
+            self.current_colour = max_area_colour
+            print(f"The detected color of the pillar is {max_area_colour}.")
         if self.m00 > 20000000:
+            print("SNAP")
             self.pillar_seen = True
+            self.masks.pop(self.current_colour, None)
+            cv2.imwrite(self.snap_path,crop_img)
         cv2.imshow('cropped image', crop_img)
         cv2.waitKey(1)
     
@@ -131,16 +144,9 @@ class SearchAndExplore:
                     # blob detected
                     if self.cy >= 560-100 and self.cy <= 560+100:
                         if self.move_rate == 'slow':
-                            if (rospy.Time.now() - last_detection_time).to_sec() >= 1.0:  # 1 second grace period
-                                print("pillar stored")
-                                distance = self.current_scan.ranges[0]
-                                self.pillar_angles[self.pillars_found] = self.current_yaw
-                                print(self.pillar_angles[self.pillars_found])
-                                self.pillar_locations[self.pillars_found] = ((distance-0.4) * np.cos(self.current_yaw), (distance-0.4)* np.sin(self.current_yaw))
-                                self.pillars_found += 1  # Increment pillars found
-                                last_detection_time = rospy.Time.now()  # Update last detection time
-                    else:
-                        self.move_rate = 'slow'
+                            self.pillars_found += 1  # Increment pillars found
+                        else:
+                            self.move_rate = 'slow'
             else:
                 self.move_rate = 'fast'
             #spin until it is centered
@@ -149,11 +155,15 @@ class SearchAndExplore:
                 self.robot_controller.set_move_cmd(0.0, self.turn_vel_fast)
             elif self.move_rate == 'slow':
                 print(f"MOVING SLOW: A blob of colour {self.colour} of size {self.m00:.0f} pixels is in view at y-position: {self.cy:.0f} pixels.")
-                self.robot_controller.set_move_cmd(0.0, self.turn_vel_slow)
+                if abs(self.cy - 560) < 10:  # Adjust the threshold for being at the center
+                    self.robot_controller.set_move_cmd(0.0, 0.0)  # Stop moving
+                else:
+                    self.robot_controller.set_move_cmd(0.0, 0.2)  # Continue moving
+            
             #work out distance and set coordinates
             self.robot_controller.publish()
             self.rate.sleep()
-
+        
     def move_robot(self):
         while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
             # wait for initial position
@@ -193,12 +203,12 @@ class SearchAndExplore:
             while self.pillar_seen == False:
                 if rospy.is_shutdown():
                     return
-                if any(self.ranges[j] < 0.4 for j in range(1, 15)) or any(self.ranges[j] < 0.4 for j in range(345, 360)) or all(self.ranges[i] > 0.4 for i in range(70, 90)) or all(self.ranges[i] < 0.3 for i in range(70, 90)):  
-                    self.robot_controller.set_move_cmd(0,0.3)
-                    if any(self.ranges[i] < 0.4 for i in range(1, 16)):
-                        self.robot_controller.set_move_cmd(0.05,-0.5)
-                    elif all(self.ranges[i] < 0.3 for i in range(70, 90)):
-                        self.robot_controller.set_move_cmd(0.1,-0.1)
+                if any(self.ranges[j] < 0.4 for j in range(1, 15)) or any(self.ranges[j] < 0.4 for j in range(345, 360)) or all(self.ranges[i] > 0.4 for i in range(65, 100)):  
+                    self.robot_controller.set_move_cmd(0.1,0.3)
+                    print("turning left")
+                    if any(self.ranges[i] < 0.4 for i in range(1, 16)) or any(self.ranges[j] < 0.4 for j in range(345, 360)):
+                        self.robot_controller.set_move_cmd(0,-0.5)
+                        print("object ahead")
                 else:
                     rospy.sleep(1) 
                     self.robot_controller.set_move_cmd(0.15,0)
