@@ -51,6 +51,11 @@ class SearchAndExplore:
         self.rate = rospy.Rate(10)
         self.start_time = rospy.Time.now()
         self.time_limit = rospy.Duration(180)
+
+        self.turn_vel_fast = 0.5  # Adjust this value as needed
+        self.turn_vel_slow = 0.2  # Adjust this value as needed
+        self.forward_vel = 0.2  # Adjust this value as needed
+        self.avoidance_distance_threshold = 0.4  # Adjust this value as needed
          
         self.bridge = CvBridge()
         # Subscribe to robot's initial position
@@ -92,6 +97,7 @@ class SearchAndExplore:
         uppers = [(130,255,255),(5,258,255),(61,258,255),(35,255,255)]
         self.masks = {colour: (lower, upper) for colour, lower, upper in zip(colours, lowers, uppers)}
 
+        max_area_colour = ""  # Initialize max_area_colour
         for i in range(4):
             if i == 0:
                 mask = cv2.inRange(hsv_img, lowers[i], uppers[i])
@@ -114,7 +120,11 @@ class SearchAndExplore:
             cv2.circle(crop_img, (int(self.cy), 200), 10, (0, 0, 255), 2)
             self.current_colour = max_area_colour
             print(f"The detected color of the pillar is {max_area_colour}.")
-        if self.m00 > 20000000:
+            #Check if the detected colour matches
+            if max_area_colour == self.colour:
+                self.colour_detected = True
+                rospy.loginfo("Correct coloured beacon detected,")        
+        if max_area_colour == self.colour and self.m00 > 20000000:
             print("SNAP")
             self.pillar_seen = True
             self.masks.pop(self.current_colour, None)
@@ -160,6 +170,7 @@ class SearchAndExplore:
             self.robot_controller.publish()
             self.rate.sleep()
         
+    
     def move_robot(self):
         self.save_map()
         while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
@@ -183,7 +194,8 @@ class SearchAndExplore:
                 if self.current_angle != float(max_range_index) and self.moving_to_edge == False:
                     self.robot_controller.set_move_cmd(0, 0.5)
                 elif self.ranges[0] > 0.4:
-                    self.robot_controller.set_move_cmd(0.2,0)
+                    #Slow down when obstacle is detected
+                    self.robot_controller.set_move_cmd(0.1,0)
                     rospy.loginfo(self.ranges[0])
                     self.moving_to_edge = True
                 else:
@@ -201,7 +213,7 @@ class SearchAndExplore:
                 if rospy.is_shutdown():
                     return
                 if any(self.ranges[j] < 0.4 for j in range(1, 15)) or any(self.ranges[j] < 0.4 for j in range(345, 360)) or all(self.ranges[i] > 0.4 for i in range(65, 100)):  
-                    self.robot_controller.set_move_cmd(0.1,0.2) #og value was 0.1,0.3
+                    self.robot_controller.set_move_cmd(0.1,0.7) #og value was 0.1,0.3
                     print("turning left")
                     if any(self.ranges[i] < 0.4 for i in range(1, 16)) or any(self.ranges[j] < 0.4 for j in range(345, 360)):
                         self.robot_controller.set_move_cmd(0,-0.7) #og value was 0,-0.5
@@ -211,7 +223,127 @@ class SearchAndExplore:
                     self.robot_controller.set_move_cmd(0.15,0) 
                 
                 self.robot_controller.publish()
+    '''
+    def move_robot(self):
+        self.save_map()
+        while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
+            # Wait for initial position
+            while self.initial_position is None:
+                rospy.logwarn("Waiting for initial position...")
+                rospy.sleep(1)
+            
+            # Check if the correct colored beacon is detected
+            if self.colour_detected:
+                rospy.loginfo("Correct colored beacon detected. Navigating towards it.")
+                # Implement navigation towards the beacon while avoiding obstacles
+                self.navigate_to_beacon()
+                break  # Exit the loop once the beacon is reached
+            
+            # Perform a spinning motion to detect the correct colored beacon
+            rospy.loginfo("Performing a spin to detect the correct colored beacon...")
+            self.robot_controller.set_move_cmd(0, 0.5)  # Spin motion
+            self.robot_controller.publish()
+            rospy.sleep(5)  # Adjust the duration of spinning as needed
+            self.robot_controller.set_move_cmd(0, 0)  # Stop spinning
+            
+            # Update the color detection flag based on the latest camera data
+            if self.colour_detected:
+                rospy.loginfo("Correct colored beacon detected. Navigating towards it.")
+                self.navigate_to_beacon()
+                break  # Exit the loop once the beacon is reached
+
+            rospy.logwarn("Correct colored beacon not detected. Continuing the search.")
+            min_left_distance = min(self.ranges[270:360])  # Consider only the left side (270 to 360 degrees)
+            
+            if min_left_distance < 0.5:  # Adjust this threshold as needed
+                # Move forward while keeping the left wall on the side
+                self.robot_controller.set_move_cmd(self.forward_vel, -0.2)  # Move forward and slightly to the left
+            else:
+                # If the left wall is too far, turn left to approach it
+                self.robot_controller.set_move_cmd(0, 0.5)  # Turn left
+            
+            self.robot_controller.publish()
+            rospy.sleep(0.1)  # Add a small delay between iterations
+
+    rospy.loginfo("Movement completed.")
     
+    def navigate_to_beacon(self):
+        while not rospy.is_shutdown():
+            # Check for collision
+            if self.check_collision():
+                rospy.logwarn("Collision detected, attempting to avoid...")
+                # Implement collision avoidance behavior here
+                self.avoid_collision()
+            
+            # Calculate the direction to the beacon based on its position in the camera view
+            direction = (self.cy - 400) / 400  # Calculate direction relative to the center
+            
+            # Move towards the beacon while avoiding obstacles
+            # Adjust the robot's heading based on the direction to the beacon
+            forward_vel = 0.2  # Adjust the forward velocity as needed
+            turn_scale = 0.5  # Adjust the turn scale as needed
+            turn_vel = turn_scale * direction
+            
+            # Limit the turn velocity within a reasonable range
+            turn_vel = max(min(turn_vel, 0.5), -0.5)
+            
+            # Set the robot's movement command
+            self.robot_controller.set_move_cmd(forward_vel, turn_vel)
+            
+            # Publish the movement command
+            self.robot_controller.publish()
+            
+            rospy.sleep(0.1)  # Add a small delay between iterations
+    def check_collision(self):
+        ranges = self.current_scan.ranges
+        obstacle_detection_range = 0.5
+
+        for i, distance in enumerate(ranges):
+            if distance < obstacle_detection_range:
+                obstacle_angle = self.current_scan.angle_min + i * self.current_scan.angle_increment
+                obstacle_angle = (obstacle_angle + np.pi) % (2 * np.pi) - np.pi
+                if abs(obstacle_angle) < np.pi / 2:
+                    lateral_distance = distance * np.sin(abs(obstacle_angle))
+                    if lateral_distance < 0.2:
+                        return True
+        return False
+    
+    def avoid_collision(self):
+        # Stop the robot
+        self.robot_controller.set_move_cmd(0, 0)
+        rospy.sleep(1)  # Wait for a brief moment
+        
+        # Get the laser scan data
+        ranges = self.current_scan.ranges
+        
+        # Find the direction with the most clearance
+        left_clearance = min(ranges[45:135])  # Left side clearance
+        right_clearance = min(ranges[225:315])  # Right side clearance
+        
+        if left_clearance > right_clearance:
+            # Turn left to find a clear path
+            self.robot_controller.set_move_cmd(0, 0.5)  # Set turn velocity
+        else:
+            # Turn right to find a clear path
+            self.robot_controller.set_move_cmd(0, -0.5)  # Set turn velocity
+        
+        rospy.sleep(1)  # Allow time for turning
+        
+        # Resume forward motion while checking for obstacles
+        forward_vel = 0.2  # Adjust the forward velocity as needed
+        self.robot_controller.set_move_cmd(forward_vel, 0)  # Set forward velocity
+        self.robot_controller.publish()  # Publish the movement command
+        
+        # Continue checking for obstacles and adjust motion until a clear path is found
+        while self.check_collision():
+            rospy.sleep(0.1)  # Wait for a brief moment for obstacle detection
+            pass  # Continue adjusting motion until a clear path is found
+        
+        # Once a clear path is found, stop turning and resume forward motion
+        self.robot_controller.set_move_cmd(forward_vel, 0)  # Set forward velocity
+        self.robot_controller.publish()  # Publish the movement command
+    '''
+
     def save_map(self):
         rospy.logdebug("saving map")
         package = "map_server"
