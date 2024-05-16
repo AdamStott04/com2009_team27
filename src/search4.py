@@ -28,7 +28,7 @@ class SearchAndExplore:
         # Register the shutdown callback
         rospy.on_shutdown(self.shutdown_ops)
 
-        self.camera_subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.camera_callback)
+        self.camera_subscriber = rospy.Subscriber('/camera/color/image_raw', Image, self.camera_callback)
         self.initial_position = None
         self.current_scan = None
         self.colour_detected = False
@@ -65,6 +65,7 @@ class SearchAndExplore:
             
     
     def shutdown_ops(self):
+        rospy.sleep(1)
         self.robot_controller.stop()
         cv2.destroyAllWindows()
         self.ctrl_c = True
@@ -75,6 +76,7 @@ class SearchAndExplore:
         self.ranges = scan_msg.ranges
        
     def camera_callback(self, img_data):
+        self.rate = rospy.Rate(10)
         # Take picture
         try:
             cv_img = self.bridge.imgmsg_to_cv2(img_data, desired_encoding="bgr8")   
@@ -152,6 +154,9 @@ class SearchAndExplore:
         self.pillar_seen = False
         #check if pillar visible
         while self.pillar_seen == False:
+            if rospy.is_shutdown():
+                return
+                
             if self.m00 > self.m00_min:
                     # blob detected
                     if self.cy >= 560-100 and self.cy <= 560+100:
@@ -277,9 +282,10 @@ class SearchAndExplore:
                     else:
                         rospy.sleep(1) 
                         self.robot_controller.set_move_cmd(0.15,0) """
-                    rospy.sleep(1)
+                    
                     self.robot_controller.publish()
                 print("DONE")
+        self.save_map()
     '''
     def move_robot(self):
         self.save_map()
@@ -406,7 +412,6 @@ class SearchAndExplore:
         package = "map_server"
         executable = "map_saver"
         maps_folder = "/home/student/catkin_ws/src/com2009_team27/maps"
-        rate = rospy.Rate(0.5)
         args = f"-f {maps_folder}/task4_map"
         node = roslaunch.core.Node(package, executable, args=args, output="screen")
 
@@ -414,7 +419,6 @@ class SearchAndExplore:
         launch.start()
 
         process = launch.launch(node)
-        rate.sleep()
 
         rospy.logdebug("Map saved succesfully.")
 
@@ -426,6 +430,7 @@ class SearchAndExplore:
         print(f"Saving the image to '{path}'...")
         try:
             cv2.imwrite(str(path), img)
+            
         except Exception as e:
             print(e)
         print(f"Saved image to {path}")         
