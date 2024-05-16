@@ -25,6 +25,8 @@ class SearchAndExplore:
         #get target colour
         self.colour = rospy.get_param('~colour')
         rospy.loginfo(f"TASK 4 BEACON: The target is {self.colour}")
+        # Register the shutdown callback
+        rospy.on_shutdown(self.shutdown_ops)
 
         self.camera_subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.camera_callback)
         self.initial_position = None
@@ -50,24 +52,17 @@ class SearchAndExplore:
         self.start_time = rospy.Time.now()
         self.time_limit = rospy.Duration(180)
          
-
         self.bridge = CvBridge()
-
-        
-        #construct path to the snaps directory
-        self.snap_path = os.path.join(os.path.dirname(__file__), 'snaps')
-        rospy.loginfo("Path to snaps directory: %s", self.snap_path)
-        
         # Subscribe to robot's initial position
         rospy.Subscriber('/odom', Odometry, self.odom_callback)
         rospy.Subscriber('/scan', LaserScan, self.scan_callback)
             
     
     def shutdown_ops(self):
-        rospy.loginfo("Shutting down")
         self.robot_controller.stop()
         cv2.destroyAllWindows()
         self.ctrl_c = True
+    
     def scan_callback(self, scan_msg):
         # Store the latest laser scan data
         self.current_scan = scan_msg
@@ -122,7 +117,8 @@ class SearchAndExplore:
         if self.m00 > 20000000:
             print("SNAP")
             self.masks.pop(self.current_colour, None)
-            cv2.imwrite(self.snap_path,crop_img)
+            #call save_image
+            self.save_image(crop_img)
         cv2.imshow('cropped image', crop_img)
         cv2.waitKey(1)
     
@@ -165,6 +161,7 @@ class SearchAndExplore:
             self.rate.sleep()
         
     def move_robot(self):
+        self.save_map()
         while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
             # wait for initial position
             while self.initial_position is None:
@@ -210,7 +207,7 @@ class SearchAndExplore:
                 if any(self.ranges[j] < 0.4 for j in range(1, 15)) or any(self.ranges[j] < 0.4 for j in range(345, 360)) or all(self.ranges[i] > 0.4 for i in range(65, 100)):  
                     #left
                     if all(self.ranges[i] > 0.4 for i in range(65, 100)):
-                        self.robot_controller.set_move_cmd(0.2,0.6)#moves and turns
+                        self.robot_controller.set_move_cmd(0.1,0.2)#moves and turns
                         #print("turning left")
                     #both
                     elif (any(self.ranges[i] < 0.4 for i in range(1, 16)) or any(self.ranges[j] < 0.4 for j in range(345, 360))) and all(self.ranges[i] > 0.4 for i in range(65, 100)):
@@ -231,12 +228,24 @@ class SearchAndExplore:
                         range_count += self.ranges[i]
                 if range_count > 500:
                     rospy.loginfo("In good space")
+                    self.robot_controller.set_move_cmd(0.1,0.2) #og value was 0.1,0.3
+                    print("turning left")
+                    if any(self.ranges[i] < 0.4 for i in range(1, 16)) or any(self.ranges[j] < 0.4 for j in range(345, 360)):
+                        self.robot_controller.set_move_cmd(0,-0.7) #og value was 0,-0.5
+                        print("object ahead")
+                else:
+                    rospy.sleep(1) 
+                    self.robot_controller.set_move_cmd(0.15,0) 
+                
+                self.robot_controller.publish()
+    
     def save_map(self):
+        rospy.logdebug("saving map")
         package = "map_server"
         executable = "map_saver"
-        maps_folder = "/home/student/catkin_ws/src/com2009_team27/src/maps"
+        maps_folder = "/home/student/catkin_ws/src/com2009_team27/maps"
         rate = rospy.Rate(0.5)
-        args = f"-f {maps_folder}/task4_map.pgm"
+        args = f"-f {maps_folder}/task4_map"
         node = roslaunch.core.Node(package, executable, args=args, output="screen")
 
         launch = roslaunch.scriptapi.ROSLaunch()
@@ -245,8 +254,19 @@ class SearchAndExplore:
         process = launch.launch(node)
         rate.sleep()
 
-        rospy.loginfo("Map saved succesfully.")
-                    
+        rospy.logdebug("Map saved succesfully.")
+
+    def save_image(self, img):
+        for _ in range(20):
+            print("Saving")
+        dirPath = "/home/student/catkin_ws/src/com2009_team27/snaps/"
+        path = dirPath + "task4_beacon.jpg"
+        print(f"Saving the image to '{path}'...")
+        try:
+            cv2.imwrite(str(path), img)
+        except Exception as e:
+            print(e)
+        print(f"Saved image to {path}")         
 
     def main(self):
         while not rospy.is_shutdown():
@@ -254,13 +274,12 @@ class SearchAndExplore:
             while (rospy.Time.now() - self.start_time).to_sec() < 180:
                 rospy.sleep(1)  # Add a small delay to reduce CPU usage
                 #Start the movement function
-                self.save_map()
                 self.move_robot()
             
             rospy.loginfo("180 seconds have elapsed, exiting.")
             break  # Exit the loop after 180 seconds
-
         rospy.loginfo("Shutting down.")
+        
     
 
 if __name__ == '__main__':
