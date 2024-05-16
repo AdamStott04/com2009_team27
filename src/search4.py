@@ -52,14 +52,7 @@ class SearchAndExplore:
         self.start_time = rospy.Time.now()
         self.time_limit = rospy.Duration(180)
          
-
         self.bridge = CvBridge()
-
-        
-        #construct path to the snaps directory
-        self.snap_path = os.path.join(os.path.dirname(__file__), 'snaps')
-        rospy.loginfo("Path to snaps directory: %s", self.snap_path)
-        
         # Subscribe to robot's initial position
         rospy.Subscriber('/odom', Odometry, self.odom_callback)
         rospy.Subscriber('/scan', LaserScan, self.scan_callback)
@@ -125,7 +118,8 @@ class SearchAndExplore:
             print("SNAP")
             self.pillar_seen = True
             self.masks.pop(self.current_colour, None)
-            cv2.imwrite(self.snap_path,crop_img)
+            #call save_image
+            self.save_image(crop_img)
         cv2.imshow('cropped image', crop_img)
         cv2.waitKey(1)
     
@@ -207,14 +201,14 @@ class SearchAndExplore:
                 if rospy.is_shutdown():
                     return
                 if any(self.ranges[j] < 0.4 for j in range(1, 15)) or any(self.ranges[j] < 0.4 for j in range(345, 360)) or all(self.ranges[i] > 0.4 for i in range(65, 100)):  
-                    self.robot_controller.set_move_cmd(0.1,0.3)
+                    self.robot_controller.set_move_cmd(0.1,0.2) #og value was 0.1,0.3
                     print("turning left")
                     if any(self.ranges[i] < 0.4 for i in range(1, 16)) or any(self.ranges[j] < 0.4 for j in range(345, 360)):
-                        self.robot_controller.set_move_cmd(0,-0.5)
+                        self.robot_controller.set_move_cmd(0,-0.7) #og value was 0,-0.5
                         print("object ahead")
                 else:
                     rospy.sleep(1) 
-                    self.robot_controller.set_move_cmd(0.15,0)
+                    self.robot_controller.set_move_cmd(0.15,0) 
                 
                 self.robot_controller.publish()
     
@@ -234,7 +228,18 @@ class SearchAndExplore:
         rate.sleep()
 
         rospy.logdebug("Map saved succesfully.")
-            
+
+    def save_image(self, img):
+        for _ in range(20):
+            print("Saving")
+        dirPath = "/home/student/catkin_ws/src/com2009_team27/snaps/"
+        path = dirPath + "task4_beacon.jpg"
+        print(f"Saving the image to '{path}'...")
+        try:
+            cv2.imwrite(str(path), img)
+        except Exception as e:
+            print(e)
+        print(f"Saved image to {path}")         
 
     def main(self):
         while not rospy.is_shutdown():
