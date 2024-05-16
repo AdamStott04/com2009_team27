@@ -21,55 +21,58 @@ class LeftWallFollower:
         self.obstacle_detected = False
 
         # Minimum distance threshold for obstacle detection
-        self.min_distance_threshold = 0.6
+        self.min_distance_threshold = 0.5
 
     def scan_callback(self, data):
         # Store the scan data
         self.scan_data = data.ranges
 
     def wall_hug(self):
-      while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
-        # Start moving forward by default
-        self.twist.linear.x = 0.3 # Forward velocity
-        self.twist.angular.z = 0.0  # No angular velocity
+        while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
+            # Start moving forward by default
+            self.twist.linear.x = 0.3  # Forward velocity
+            self.twist.angular.z = 0.0  # No angular velocity
 
-        # Check if obstacle is detected
-        if self.obstacle_detected:
-            # Stop forward motion
-            self.twist.linear.x = 0.0
-            #data from lidar sensor
-            front_sensor_data = [x for x in self.scan_data[0:10] + self.scan_data[350:] if x]
-            left_sensor_data = [x for x in self.scan_data[210:330] if x]
-            right_sensor_data = [x for x in self.scan_data[30:150]  if x]
-            closest_front = min(front_sensor_data)
-            closest_left = min(left_sensor_data)
-            closest_right = min(right_sensor_data)
-            print(closest_front)
-            print("=-==-=-=-=")
-            print(closest_left)
-            print("=-==-=-=-=")
-            print(closest_right)
-            
-            if not closest_front >= self.min_distance_threshold:
-                # No obstacles in the 34-degree cone, resume forward motion
-                self.obstacle_detected = False
-            else:
-                left_wall = closest_left >= 0.3
-                right_wall = closest_right >= 0.3
-                if right_wall:
-                    self.twist.angular.z = 1.4  # Turn left
-                elif left_wall:
-                    self.twist.angular.z = -1.4 # Turn right
-        else:
-            # Check if obstacle is within a certain range in the 34-degree cone
-            non_empty_data = [x for x in self.scan_data[0:17] + self.scan_data[343:] if x]
-            if non_empty_data and min(non_empty_data) < self.min_distance_threshold:
-                self.obstacle_detected = True
+            # Check if obstacle is detected
+            if self.obstacle_detected:
+                # Stop forward motion
                 self.twist.linear.x = 0.0
 
-        # Publish the Twist message
-        self.cmd_vel_pub.publish(self.twist)
-        self.rate.sleep()
+                # Check clearance in different directions
+                front_sensor_data = [x for x in self.scan_data[0:17] + self.scan_data[343:] if x]
+                left_sensor_data = [x for x in self.scan_data[260:280] if x]
+                right_sensor_data = [x for x in self.scan_data[80:100] if x]
+
+                closest_front = min(front_sensor_data) if front_sensor_data else float('inf')
+                closest_left = min(left_sensor_data) if left_sensor_data else float('inf')
+                closest_right = min(right_sensor_data) if right_sensor_data else float('inf')
+
+                rospy.loginfo("Front Distance: %f, Left Distance: %f, Right Distance: %f",
+                              closest_front, closest_left, closest_right)
+
+                if closest_front >= self.min_distance_threshold:
+                    # No obstacles in the front, go forward
+                    self.obstacle_detected = False
+                else:
+                    if closest_front < self.min_distance_threshold:
+                        self.twist.linear.x = -0.1
+                    # Check which direction has more clearance
+                    if closest_left > closest_right:
+                        # Turn left
+                        self.twist.angular.z = -0.8
+                    else:
+                        # Turn right
+                        self.twist.angular.z = 0.8
+            else:
+                # Check if obstacle is within a certain range in the 34-degree cone
+                non_empty_data = [x for x in self.scan_data[0:17] + self.scan_data[343:] if x]
+                if non_empty_data and min(non_empty_data) < self.min_distance_threshold:
+                    self.obstacle_detected = True
+                    self.twist.linear.x = 0.0
+
+            # Publish the Twist message
+            self.cmd_vel_pub.publish(self.twist)
+            self.rate.sleep()
 
     def shutdown(self):
         rospy.loginfo("Stopping Bot...")
@@ -84,6 +87,3 @@ if __name__ == '__main__':
         explorer.wall_hug()
     except rospy.ROSInterruptException:
         pass
-
-
-
