@@ -30,7 +30,7 @@ class LeftWallFollower:
     def wall_hug(self):
         while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
             # Start moving forward by default
-            self.twist.linear.x = 0.3  # Forward velocity
+            self.twist.linear.x = 0.34  # Forward velocity
             self.twist.angular.z = 0.0  # No angular velocity
 
             # Check if obstacle is detected
@@ -67,13 +67,18 @@ class LeftWallFollower:
             else:
                 # Check if obstacle is within a certain range in the 34-degree cone
                 non_empty_data = [x for x in self.scan_data[0:20] + self.scan_data[340:] if x]
+                behind = [x for x in self.scan_data[170:190] if x]
                 if non_empty_data and min(non_empty_data) < self.min_distance_threshold:
                     self.obstacle_detected = True
                     self.twist.linear.x = 0.0
+                if behind and min(behind) < 0.1:
+                    self.obstacle_detected = True
+                    self.twist.linear.x = 0.05
 
             # Publish the Twist message
             self.cmd_vel_pub.publish(self.twist)
             self.rate.sleep()
+        self.shutdown()
 
     def shutdown(self):
         rospy.loginfo("Stopping Bot...")
