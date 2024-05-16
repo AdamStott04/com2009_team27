@@ -121,7 +121,6 @@ class SearchAndExplore:
             print(f"The detected color of the pillar is {max_area_colour}.")
         if self.m00 > 20000000:
             print("SNAP")
-            self.pillar_seen = True
             self.masks.pop(self.current_colour, None)
             cv2.imwrite(self.snap_path,crop_img)
         cv2.imshow('cropped image', crop_img)
@@ -145,6 +144,7 @@ class SearchAndExplore:
                     if self.cy >= 560-100 and self.cy <= 560+100:
                         if self.move_rate == 'slow':
                             self.pillars_found += 1  # Increment pillars found
+                            
                         else:
                             self.move_rate = 'slow'
             else:
@@ -155,7 +155,7 @@ class SearchAndExplore:
                 self.robot_controller.set_move_cmd(0.0, self.turn_vel_fast)
             elif self.move_rate == 'slow':
                 print(f"MOVING SLOW: A blob of colour {self.colour} of size {self.m00:.0f} pixels is in view at y-position: {self.cy:.0f} pixels.")
-                if abs(self.cy - 560) < 10:  # Adjust the threshold for being at the center
+                if abs(self.cy - 560) < 10:  #stops it from spinnning past the pillar
                     self.robot_controller.set_move_cmd(0.0, 0.0)  # Stop moving
                 else:
                     self.robot_controller.set_move_cmd(0.0, 0.2)  # Continue moving
@@ -192,6 +192,8 @@ class SearchAndExplore:
                 else:
                     destination_reached = True
                     self.robot_controller.set_move_cmd(0,0)
+                
+                    
                 self.robot_controller.publish()
             #initial turn
             while any(self.ranges[i] > 0.5 for i in range(65,90)):
@@ -199,21 +201,36 @@ class SearchAndExplore:
                 self.robot_controller.publish()
             #log point
             self.start_point = self.current_pos
-            #loop keeping the wall on the left breaking if it sees a pillar or retutns to the original point
-            while self.pillar_seen == False:
+            #wait till it has moved from the start point
+            rospy.sleep(100)
+            #loop keeping the wall on the left breaking if it returns to the original point
+            while self.start_point != self.current_pos == False:
                 if rospy.is_shutdown():
                     return
                 if any(self.ranges[j] < 0.4 for j in range(1, 15)) or any(self.ranges[j] < 0.4 for j in range(345, 360)) or all(self.ranges[i] > 0.4 for i in range(65, 100)):  
-                    self.robot_controller.set_move_cmd(0.1,0.3)
-                    print("turning left")
-                    if any(self.ranges[i] < 0.4 for i in range(1, 16)) or any(self.ranges[j] < 0.4 for j in range(345, 360)):
-                        self.robot_controller.set_move_cmd(0,-0.5)
-                        print("object ahead")
+                    #left
+                    if all(self.ranges[i] > 0.4 for i in range(65, 100)):
+                        self.robot_controller.set_move_cmd(0.2,0.6)#moves and turns
+                        #print("turning left")
+                    #both
+                    elif (any(self.ranges[i] < 0.4 for i in range(1, 16)) or any(self.ranges[j] < 0.4 for j in range(345, 360))) and all(self.ranges[i] > 0.4 for i in range(65, 100)):
+                        print("forward and left ai ai ai")
+                        #self.robot_controller.set_move_cmd(0,0.3)#just turns
+                    #forward
+                    elif any(self.ranges[i] < 0.4 for i in range(1, 16)) or any(self.ranges[j] < 0.4 for j in range(345, 360)):
+                        self.robot_controller.set_move_cmd(0,-0.5)# just turns
+                        #print("object ahead")
                 else:
                     rospy.sleep(1) 
                     self.robot_controller.set_move_cmd(0.15,0)
-                
                 self.robot_controller.publish()
+                #checking if its in good space
+                range_count = 0
+                for i in range(0,359):
+                    if self.ranges[i] != np.Inf:
+                        range_count += self.ranges[i]
+                if range_count > 500:
+                    rospy.loginfo("In good space")
     def save_map(self):
         package = "map_server"
         executable = "map_saver"
