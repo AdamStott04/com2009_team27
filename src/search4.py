@@ -42,6 +42,7 @@ class SearchAndExplore:
         self.m00_min = 10000
         self.current_colour = ""
         self.pillar_seen = False
+        self.pillar_found = False
         self.moving_to_edge = False
         self.take_picture = False
         self.pillars_found = 0
@@ -119,14 +120,20 @@ class SearchAndExplore:
                         max_area_colour = colour
             cv2.circle(crop_img, (int(self.cy), 200), 10, (0, 0, 255), 2)
             self.current_colour = max_area_colour
-            print(f"The detected color of the pillar is {max_area_colour}.")
             #Check if the detected colour matches
             if max_area_colour == self.colour:
                 self.colour_detected = True
                 rospy.loginfo("Correct coloured beacon detected,")        
         if max_area_colour == self.colour and self.m00 > 20000000:
             print("SNAP")
-            self.masks.pop(self.current_colour, None)
+            self.pillar_found = True
+            self.pillars_found += 1
+            remove_index = colours.index(self.current_colour)
+            colours[remove_index] = ""
+            lowers[remove_index] = 0
+            uppers[remove_index] = 0
+            self.masks = {colour: (lower, upper) for colour, lower, upper in zip(colours, lowers, uppers)}
+
             #call save_image
             self.save_image(crop_img)
         cv2.imshow('cropped image', crop_img)
@@ -142,29 +149,27 @@ class SearchAndExplore:
         _, _, self.current_yaw = euler_from_quaternion([orientation_q.x, orientation_q.y, orientation_q.z, orientation_q.w])
     
     def search_for_pillars(self):
-        last_detection_time = rospy.Time.now()
+        self.pillar_seen = False
         #check if pillar visible
-        while self.pillars_found != 1:
+        while self.pillar_seen == False:
             if self.m00 > self.m00_min:
                     # blob detected
                     if self.cy >= 560-100 and self.cy <= 560+100:
                         if self.move_rate == 'slow':
-                            self.pillars_found += 1  # Increment pillars found
-                            
-                        else:
-                            self.move_rate = 'slow'
+                            self.pillar_seen = True  # Increment pillars found
+                    else:
+                        self.move_rate = 'slow'
             else:
                 self.move_rate = 'fast'
             #spin until it is centered
             if self.move_rate == 'fast':
                 print("MOVING FAST: I can't see anything at the moment, scanning the area...")
-                self.robot_controller.set_move_cmd(0.0, self.turn_vel_fast)
+                self.robot_controller.set_move_cmd(0.0, 0.5)
             elif self.move_rate == 'slow':
-                print(f"MOVING SLOW: A blob of colour {self.colour} of size {self.m00:.0f} pixels is in view at y-position: {self.cy:.0f} pixels.")
                 if abs(self.cy - 560) < 10:  #stops it from spinnning past the pillar
                     self.robot_controller.set_move_cmd(0.0, 0.0)  # Stop moving
                 else:
-                    self.robot_controller.set_move_cmd(0.0, 0.2)  # Continue moving
+                    self.robot_controller.set_move_cmd(0.0, 0.1)  # Continue moving
             
             #work out distance and set coordinates
             self.robot_controller.publish()
@@ -178,7 +183,7 @@ class SearchAndExplore:
             while self.initial_position is None:
                 rospy.logwarn("Waiting for initial position...")
                 rospy.sleep(1)
-            # find farest point
+            """# find farest point
             max_range_index = self.ranges.index(max(self.ranges))
             # Return the lowest distance found
             rospy.loginfo(f"angle of approach is {max_range_index}")
@@ -196,60 +201,85 @@ class SearchAndExplore:
                 elif self.ranges[0] > 0.4:
                     #Slow down when obstacle is detected
                     self.robot_controller.set_move_cmd(0.1,0)
-                    rospy.loginfo(self.ranges[0])
                     self.moving_to_edge = True
                 else:
                     destination_reached = True
-                    self.robot_controller.set_move_cmd(0,0)
-                
-                    
+                    self.robot_controller.set_move_cmd(0,0)       
                 self.robot_controller.publish()
             #initial turn
-            while any(self.ranges[i] > 0.5 for i in range(65,90)):
+            while any(self.ranges[i] > 0.4 for i in range(60,120)):
                 self.robot_controller.set_move_cmd(0,-0.5)
                 self.robot_controller.publish()
-            #log point
+            #log point and time
             self.start_point = self.current_pos
-            #wait till it has moved from the start point
-            rospy.sleep(100)
-            #loop keeping the wall on the left breaking if it returns to the original point
-            while self.start_point != self.current_pos == False:
-                if rospy.is_shutdown():
-                    return
-                if any(self.ranges[j] < 0.4 for j in range(1, 15)) or any(self.ranges[j] < 0.4 for j in range(345, 360)) or all(self.ranges[i] > 0.4 for i in range(65, 100)):  
-                    #left
-                    if all(self.ranges[i] > 0.4 for i in range(65, 100)):
-                        self.robot_controller.set_move_cmd(0.1,0.2)#moves and turns
-                        #print("turning left")
-                    #both
-                    elif (any(self.ranges[i] < 0.4 for i in range(1, 16)) or any(self.ranges[j] < 0.4 for j in range(345, 360))) and all(self.ranges[i] > 0.4 for i in range(65, 100)):
-                        print("forward and left ai ai ai")
-                        #self.robot_controller.set_move_cmd(0,0.3)#just turns
-                    #forward
-                    elif any(self.ranges[i] < 0.4 for i in range(1, 16)) or any(self.ranges[j] < 0.4 for j in range(345, 360)):
-                        self.robot_controller.set_move_cmd(0,-0.5)# just turns
-                        #print("object ahead")
-                else:
-                    rospy.sleep(1) 
-                    self.robot_controller.set_move_cmd(0.15,0)
-                self.robot_controller.publish()
-                #checking if its in good space
+            start_time = rospy.Time.now()        """
+
+            #loop till all four pillars are found
+            while self.pillars_found < 4:
+                self.pillar_found = False
+                #find pillar locations
+                self.search_for_pillars()
+                destination_reached = False
+                #drive to pillar
+                while destination_reached == False:
+                    if any(self.ranges[i] < 0.4 for i in range(0,15)) or any(self.ranges[j] < 0.4 for j in range(345, 360)):
+                        destination_reached = True
+                        self.robot_controller.set_move_cmd(0,0)
+                    else:
+                        self.robot_controller.set_move_cmd(0.2,0)
+                    self.robot_controller.publish()
+                #spin till wall is on the left
+                while any(self.ranges[i] > 0.5 for i in range(60,110)):
+                    self.robot_controller.set_move_cmd(0,-0.5)
+                    self.robot_controller.publish()
+                    if rospy.is_shutdown():
+                        return
+
+                #made it to the room now to find this pillar
+                start_pos = self.current_pos
                 range_count = 0
-                for i in range(0,359):
-                    if self.ranges[i] != np.Inf:
-                        range_count += self.ranges[i]
-                if range_count > 500:
-                    rospy.loginfo("In good space")
-                    self.robot_controller.set_move_cmd(0.1,0.7) #og value was 0.1,0.3
-                    print("turning left")
-                    if any(self.ranges[i] < 0.4 for i in range(1, 16)) or any(self.ranges[j] < 0.4 for j in range(345, 360)):
-                        self.robot_controller.set_move_cmd(0,-0.7) #og value was 0,-0.5
-                        print("object ahead")
-                else:
-                    rospy.sleep(1) 
-                    self.robot_controller.set_move_cmd(0.15,0) 
-                
-                self.robot_controller.publish()
+                while range_count < 360 or self.pillar_found == False:
+                    range_count = np.sum(self.ranges)
+                    #check if its doing a loop of the arena
+                    dx = self.current_pos.x - start_pos.x
+                    dy = self.current_pos.y - start_pos.y
+                    distance_from_goal = np.sqrt(dx**2 + dy**2)
+                    if distance_from_goal > 2:
+                        self.robot_controller.set_move_cmd(0,-0.5)
+                        rospy.sleep(4)
+                        print("too far")
+                    if rospy.is_shutdown():
+                        return
+                    #left
+                    if all(self.ranges[l] < 0.6 for l in range(80, 100)):#if the wall is on the left
+                        if any(self.ranges[f] < 0.5 for f in range(0,15)) or  any(self.ranges[f] < 0.5 for f in range(340,360)):#if the wall is in front
+                            print("In front")
+                            self.robot_controller.set_move_cmd(0,-0.3)
+                        else:
+                            print("move eet") 
+                            self.robot_controller.set_move_cmd(0.15,0) 
+                    elif all(self.ranges[l] > 0.6 for l in range(80, 100)):
+                        if any(self.ranges[f] < 0.5 for f in range(0,15)) or any(self.ranges[f] < 0.5 for f in range(340,360)) :#if the wall is in front
+                            print("In front")
+                            self.robot_controller.set_move_cmd(0.1,0.1)
+                        else:
+                            print("lerft")
+                            self.robot_controller.set_move_cmd(0,0.6)#if wall not on the left spinny spinny 
+                    self.robot_controller.publish()
+                    
+                    """ if range_count > 500:
+                        rospy.loginfo("In good space")
+                        self.robot_controller.set_move_cmd(0.1,0.7) #og value was 0.1,0.3
+                        print("turning left")
+                        if any(self.ranges[i] < 0.4 for i in range(1, 16)) or any(self.ranges[j] < 0.4 for j in range(345, 360)):
+                            self.robot_controller.set_move_cmd(0,-0.7) #og value was 0,-0.5
+                            print("object ahead") 
+                    else:
+                        rospy.sleep(1) 
+                        self.robot_controller.set_move_cmd(0.15,0) """
+                    rospy.sleep(1)
+                    self.robot_controller.publish()
+                print("DONE")
     '''
     def move_robot(self):
         self.save_map()
