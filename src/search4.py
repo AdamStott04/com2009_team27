@@ -24,7 +24,7 @@ class SearchAndExplore:
        
         #get target colour
         self.colour = rospy.get_param('~colour')
-        rospy.loginfo(f"TASK 4 BEACON: The target is {self.colour}")
+        rospy.loginfo(f"TASK 4 BEACON: The target is {{{self.colour}}}")
         # Register the shutdown callback
         rospy.on_shutdown(self.shutdown_ops)
 
