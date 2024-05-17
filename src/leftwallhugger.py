@@ -21,7 +21,7 @@ class LeftWallFollower:
         self.obstacle_detected = False
 
         # Minimum distance threshold for obstacle detection
-        self.min_distance_threshold = 0.47
+        self.min_distance_threshold = 0.49
 
     def scan_callback(self, data):
         # Store the scan data
@@ -55,8 +55,8 @@ class LeftWallFollower:
                     # No obstacles in the front, go forward
                     self.obstacle_detected = False
                 else:
-                    if closest_front < self.min_distance_threshold:
-                        self.twist.linear.x = -0.0
+                    if closest_front < 0.2:
+                        self.twist.linear.x = -0.1
                     # Check which direction has more clearance
                     if closest_left > closest_right:
                         # Turn left
@@ -73,7 +73,7 @@ class LeftWallFollower:
                     self.twist.linear.x = 0.0
                 if behind and min(behind) < 0.1:
                     self.obstacle_detected = True
-                    self.twist.linear.x = 0.05
+                    self.twist.linear.x = 0.1
 
             # Publish the Twist message
             self.cmd_vel_pub.publish(self.twist)
