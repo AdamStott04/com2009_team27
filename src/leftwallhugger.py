@@ -21,7 +21,7 @@ class LeftWallFollower:
         self.obstacle_detected = False
 
         # Minimum distance threshold for obstacle detection
-        self.min_distance_threshold = 0.47
+        self.min_distance_threshold = 0.49
 
     def scan_callback(self, data):
         # Store the scan data
