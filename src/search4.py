@@ -28,7 +28,7 @@ class SearchAndExplore:
         # Register the shutdown callback
         rospy.on_shutdown(self.shutdown_ops)
 
-        self.camera_subscriber = rospy.Subscriber('/camera/rgb/image_raw', Image, self.camera_callback)
+        self.camera_subscriber = rospy.Subscriber('/camera/color/image_raw', Image, self.camera_callback)
         self.initial_position = None
         self.current_scan = None
         self.colour_detected = False
@@ -50,6 +50,7 @@ class SearchAndExplore:
         self.lowers = [(100,200,100),(0,200,100),(75,200,100),(22,200,100)]
         self.uppers = [(150,250,255),(5,255,255),(90,255,255),(30,255,255)]
         self.saving = False
+        self.picture_taken = False
 
 
         # Set the publishing rate to 10Hz
@@ -106,6 +107,7 @@ class SearchAndExplore:
         self.masks = {colour: (lower, upper) for colour, lower, upper in zip(self.colours, self.lowers, self.uppers)}
 
         max_area_colour = ""  # Initialize max_area_colour
+        mask = 0
         for i in range(len(self.colours)):
             if i == 0:
                 mask = cv2.inRange(hsv_img, self.lowers[i], self.uppers[i])
@@ -128,9 +130,11 @@ class SearchAndExplore:
             cv2.circle(crop_img, (int(self.cy), 200), 10, (0, 0, 255), 2)
             self.current_colour = max_area_colour
             #Check if the detected colour matches
+        
         if self.saving == True:
             self.save_image(crop_img)
             self.saving = False
+            self.picture_taken = True
         cv2.imshow('cropped image', crop_img)
         cv2.waitKey(1)
     
@@ -149,8 +153,6 @@ class SearchAndExplore:
         while self.pillar_seen == False and rospy.Time.now() - self.start_time < self.time_limit:
             if rospy.is_shutdown():
                 return
-            print(rospy.Time.now() - self.start_time)
-            print(self.time_limit)
             if self.m00 > self.m00_min:
                     # blob detected
                     if self.cy >= 560-100 and self.cy <= 560+100:
@@ -161,8 +163,10 @@ class SearchAndExplore:
                             print(remove_index)
                             del self.colours[remove_index]
                             del self.lowers[remove_index]
-                            del self.uppers[remove_index] 
+                            del self.uppers[remove_index]
+                            self. pillars_found += 1 
                             self.masks = {colour: (lower, upper) for colour, lower, upper in zip(self.colours, self.lowers, self.uppers)}
+                            print(self.pillars_found)
                             if self.current_colour == self.colour:
                                 self.saving = True
                     else:
@@ -185,52 +189,24 @@ class SearchAndExplore:
     
     def move_robot(self):
         self.save_map()
+        self.saving = True
         while not rospy.is_shutdown() and rospy.Time.now() - self.start_time < self.time_limit:
             # wait for initial position
             while self.initial_position is None:
                 rospy.logwarn("Waiting for initial position...")
                 rospy.sleep(1)
-            """# find farest point
-            max_range_index = self.ranges.index(max(self.ranges))
+            # find farest point
             # Return the lowest distance found
-            rospy.loginfo(f"angle of approach is {max_range_index}")
-            #move to this point
-            destination_reached = False
-            while destination_reached != True:
-                if rospy.is_shutdown():
-                        return
-                if self.current_yaw * (180/np.pi) < 0:
-                    self.current_angle = int(360-(np.round(-1*(self.current_yaw * (180/np.pi)))))
-                else:
-                    self.current_angle = int(np.round(self.current_yaw * (180/np.pi)))
-                if self.current_angle != float(max_range_index) and self.moving_to_edge == False:
-                    self.robot_controller.set_move_cmd(0, 0.5)
-                elif self.ranges[0] > 0.4:
-                    #Slow down when obstacle is detected
-                    self.robot_controller.set_move_cmd(0.1,0)
-                    self.moving_to_edge = True
-                else:
-                    destination_reached = True
-                    self.robot_controller.set_move_cmd(0,0)       
-                self.robot_controller.publish()
-            #initial turn
-            while any(self.ranges[i] > 0.4 for i in range(60,120)):
-                self.robot_controller.set_move_cmd(0,-0.5)
-                self.robot_controller.publish()
-            #log point and time
-            self.start_point = self.current_pos
-            start_time = rospy.Time.now()        """
+            
 
             #loop till all four pillars are found
             while self.pillars_found < 4 and rospy.Time.now() - self.start_time < self.time_limit:
-                print(rospy.Time.now() - self.start_time)
                 self.pillar_found = False
                 #find pillar locations
                 self.search_for_pillars()
                 destination_reached = False
                 #drive to pillar
-                while destination_reached == False:
-                    print(rospy.Time.now() - self.start_time)
+                while destination_reached == False and rospy.Time.now() - self.start_time < self.time_limit:
                     if any(self.ranges[i] < 0.5 for i in range(0,15)) or any(self.ranges[j] < 0.5 for j in range(345, 360)):
                         destination_reached = True
                         self.robot_controller.set_move_cmd(0,0)
@@ -240,6 +216,41 @@ class SearchAndExplore:
                 
                     
                     self.robot_controller.publish()
+                    #move to this point
+            print("PILLARS")
+            max_range_index = self.ranges.index(max(self.ranges))
+            rospy.loginfo(f"angle of approach is {max_range_index}")
+            destination_reached = False
+            while destination_reached != True and rospy.Time.now() - self.start_time < self.time_limit:
+                if rospy.is_shutdown():
+                        return
+                if self.current_yaw * (180/np.pi) < 0:
+                    self.current_angle = int(360-(np.round(-1*(self.current_yaw * (180/np.pi)))))
+                else:
+                    self.current_angle = int(np.round(self.current_yaw * (180/np.pi)))
+                print(self.current_angle)
+                if self.current_angle != float(max_range_index) and self.moving_to_edge == False:
+                    self.robot_controller.set_move_cmd(0, 0.5)
+                elif any(self.ranges[i] < 0.4 for i in range(1,15)) or any(self.ranges[i] < 0.4 for i in range(345,360)):
+                    print("driving")
+                    #Slow down when obstacle is detected
+                    self.robot_controller.set_move_cmd(0.1,0)
+                    self.moving_to_edge = True
+                else:
+                    destination_reached = True
+                    self.robot_controller.set_move_cmd(0,0)       
+                self.robot_controller.publish()
+            while rospy.Time.now() - self.start_time < self.time_limit:
+                if rospy.is_shutdown():
+                    return
+                if any(self.ranges[i] < 0.4 for i in range(1,30)) or any(self.ranges[i] < 0.4 for i in range(330,360)):
+                    self.robot_controller.set_move_cmd(0,-0.5)
+                    print("obstacle detected")
+                else:
+                    self.robot_controller.set_move_cmd(0.1,0)
+                    print("driving")
+                self.robot_controller.publish()
+            
         self.save_map()
     
 
@@ -280,6 +291,7 @@ class SearchAndExplore:
             rospy.loginfo("180 seconds have elapsed, exiting.")
             break  # Exit the loop after 180 seconds
         rospy.loginfo("Shutting down.")
+
         
     
 
